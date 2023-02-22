@@ -1,0 +1,66 @@
+
+# --- Build system configuration
+
+[build-system]
+requires = [ "setuptools>=41", "setuptools-scm", ]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools-git-versioning]
+enabled = true
+
+[tool.setuptools_scm]  # this empty section enables the tool
+
+
+# --- Project Metadata
+
+[project]
+name = "specster"
+dynamic = ["version"]  # version is fetched by setuptools-git-versioning
+
+authors = [
+  { name="Derrick Chambers", email="chambers.ja.derrick@gmail.com" },
+]
+
+description = "A python harnass to tame the specfem beast"
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering",
+]
+
+keywords = ["geophysics"]
+
+# --- Dependencies
+
+dependencies = [
+    "numpy >= 1.13.0",
+    "pydantic",
+    "obspy",
+    "obsplus",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+
+test = [
+    "pytest",
+    "pre-commit",
+]
+dev = ["specster[test]"]
+
+# --- URLs for project
+
+[project.urls]
+"Bug Tracker" = "https://github.com/d-chambers/specster/issues"
+"Documentation" = "https://github.com/d-chambers/specster"
+"Homepage" = "https://github.com/d-chambers/specster"

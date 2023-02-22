@@ -1,0 +1,11 @@
+name: test
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - numpy
+  - pytest
+  - scikit-learn
+  - pip
+  - pip:
+      - pytest-cov
