@@ -66,6 +66,27 @@ _ENUM_MAP = {
         "3": "acceleration vector",
         "4": "pressure",
     },
+    "source_type": {
+        "1": "elastic force or acoustic pressure, or P wave for initial field",
+        "2": "moment tensor or S wave if initial field",
+        "3": "Rayleigh Wave, must set initialfield",
+        "4": "Plane P wave, no converted/reflected waves at surface",
+        "5": "Plane S wave, no converted/reflected waves at surface",
+        "6": "mode (2,3) of a rectangular membrane",
+    },
+    "time_function_type": {
+        "1": "second derivative of Gaussian",
+        "2": "First derivative of a Gaussian",
+        "3": "Gaussian",
+        "4": "Dirac (probably produce noise data due to freqs above mesh res)",
+        "5": "Heaviside (probably produce noise data due to freqs above mesh res)",
+        "6": "Ocean acoustics type I",
+        "7": "Ocean acoustics type II",
+        "8": "External source time function",
+        "9": "Burst",
+        "10": "Sinus source time function",
+        "11": "Marmousi Ormsby wavelet",
+    },
 }
 
 # extended meaning for certain parameters

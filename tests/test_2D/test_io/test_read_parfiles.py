@@ -7,18 +7,6 @@ import pytest
 import specster.d2.io.parfile as pf
 
 
-@pytest.fixture(scope='class')
-def par_dicts_2d(par_file_path):
-    """Return dictionaries of parameters for 2D test cases."""
-    return pf.parse_parfile(par_file_path)
-
-
-@pytest.fixture(scope='class')
-def run_parameters_2d(par_dicts_2d) -> pf.RunParameters:
-    """Return dictionaries of parameters for 2D test cases."""
-    return pf.RunParameters.init_from_dict(par_dicts_2d)
-
-
 class TestReadMaterialLine:
     """Tests for reading the material line."""
 
@@ -74,3 +62,14 @@ class TestParseExamplePars:
     def test_parse(self, run_parameters_2d):
         """Ensure each parfile can be read."""
         assert isinstance(run_parameters_2d, pf.RunParameters)
+
+
+class TestSources:
+    """Tests for sources attached to parfiles."""
+
+    def test_sources_attached(self, run_parameters_2d):
+        """Ensure run has some sources attached."""
+        sources = run_parameters_2d.sources
+        assert sources.nsources == len(sources.sources)
+        for source in sources.sources:
+            assert isinstance(source, pf.Source)

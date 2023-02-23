@@ -13,6 +13,7 @@ class SpecsterModel(BaseModel):
 
     class Config:
         """Configuration for models."""
+
         validate_assignment = True  # validators run on assignment
 
 
@@ -88,3 +89,13 @@ def parse_params_into_model(model: SpecsterModel, params):
     assert len(params) == len(field_names), "names should match args"
     input_dict = {i: v for i, v in zip(field_names, params)}
     return model(**input_dict)
+
+
+def iter_file_lines(path, ignore="#"):
+    """Read lines of a file, dont include comment lines."""
+    with open(path, "r") as fi:
+        for line in fi.readlines():
+            stripped = line.strip()
+            if stripped.startswith(ignore) or not stripped:
+                continue
+            yield line

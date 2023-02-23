@@ -1,39 +1,29 @@
 """
 Module for reading/writing parfiles.
 """
+import fnmatch
+import re
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional
 
 from pydantic import Field
 
-from specster.constants import _ENUM_MAP, _MEANING_MAP, _SUB_VALUES
+from specster.constants import _ENUM_MAP, _MEANING_MAP
 from specster.exceptions import UnhandledParFileLine
-from specster.utils import SpecFloat, SpecsterModel, dict_to_description, extract_parline_key_value, \
-    parse_params_into_model
+from specster.model import AbstractParameterModel
+from specster.utils import (
+    SpecFloat,
+    SpecsterModel,
+    dict_to_description,
+    extract_parline_key_value,
+    iter_file_lines,
+    parse_params_into_model,
+)
+
+SOURCE_REG = re.compile(fnmatch.translate("source*"), re.IGNORECASE)
 
 
 # --- Material Models
-
-
-class AbstractParameterModel(SpecsterModel):
-    """Abstract class for defining specfem parameter models."""
-
-    @classmethod
-    def init_from_dict(cls, data_dict):
-        """Init class, and subclasses, from a dict of values"""
-        my_fields = set(cls.__fields__)
-        nested_models = {
-            k: v.type_ for k, v in cls.__fields__.items()
-            if hasattr(v.type_, "init_from_dict")
-               # if the key is already the right type we skip it
-               and not isinstance(data_dict.get(k), v.type_)
-        }
-        # get inputs for this model
-        needed_inputs = {k: v for k, v in data_dict.items() if k in my_fields}
-        # add nested models
-        for field_name, model in nested_models.items():
-            needed_inputs[field_name] = model.init_from_dict(data_dict)
-        return cls(**needed_inputs)
 
 
 class AbstractMaterialModelType(SpecsterModel):
@@ -166,7 +156,7 @@ class MaterialModels(AbstractParameterModel):
     )
 
     @classmethod
-    def read_material_properties(cls, nbmodels, iterator):
+    def read_material_properties(cls, nbmodels, iterator, **kwargs):
         """Read material properties"""
         model_type_key = AbstractMaterialModelType._type_cls_map
         out = {
@@ -212,7 +202,7 @@ class Regions(AbstractParameterModel):
     regions: List[Region2D]
 
     @classmethod
-    def read_regions(cls, nbregions, iterator):
+    def read_regions(cls, nbregions, iterator, **kawrgs):
         """Read material properties"""
         regions = []
         for _ in range(int(nbregions)):
@@ -296,10 +286,46 @@ class Attenuation(AbstractParameterModel):
     )
 
 
+class Source(SpecsterModel):
+    """A single Source"""
+
+    source_surf: bool = Field(False, description="tie source to surface")
+    xs: SpecFloat = Field(1_000.0, description="Source x location in meters")
+    zs: SpecFloat = Field(1_000.0, description="Source z location in meters")
+    source_type: Literal["1", "2", "3", "4", "5", "6"] = Field(
+        "source_type",
+        description=dict_to_description("source_type", _ENUM_MAP["source_type"]),
+    )
+    time_function_type: Literal[tuple(_ENUM_MAP["time_function_type"])] = Field(
+        "time_function_type",
+        description=dict_to_description(
+            "time_function_type", _ENUM_MAP["time_function_type"]
+        ),
+    )
+    name_of_source_file: str = Field(
+        "", description="External source time function to use."
+    )
+    burst_band_width: SpecFloat = Field(
+        0, description="bandwith of burst (for source_time option 9)"
+    )
+    f0: SpecFloat = Field(1.0, description="Dominant source freq (Hz)")
+    tshift: SpecFloat = Field(
+        0.0, description="time shift when multisources used (one must be 0)"
+    )
+    anglesource: SpecFloat = Field(0.0, description="Plane have incident angle")
+    Mxx: SpecFloat = Field(1.0, description="Mxx component of moment tensor")
+    Mzz: SpecFloat = Field(1.0, description="Mzz component of moment tensor")
+    Mxz: SpecFloat = Field(0.0, description="Mxz component of moment tensor")
+    factor: SpecFloat = Field(1.000e10, description="amplification factor")
+    vx: SpecFloat = Field(0.0, description="Horizontal source velocity (m/s)")
+    vz: SpecFloat = Field(0.0, description="Vertical source velocity (m/s)")
+
+
 class Sources(AbstractParameterModel):
     """Controls the source parameters (under Source section)."""
 
     nsources: int = Field(1, description="number of sources")
+
     force_normal_to_surface: bool = Field(
         False,
         description="angleforce normal to surface",
@@ -330,6 +356,29 @@ class Sources(AbstractParameterModel):
         ),
     )
     write_moving_sources_database: bool = Field(False, description="See manual")
+
+    sources: List[Source]
+
+    @staticmethod
+    def read_sources(nsources, iterator, path):
+        """Read the sources"""
+        source_count = int(nsources)
+        iterable = (x for x in path.parent.glob("*") if SOURCE_REG.match(str(x.name)))
+        sorted_source_files = sorted(iterable, key=lambda x: x.name)
+        sources = []
+        for path in sorted_source_files[:source_count]:
+            source_kwargs = {}
+            iterator = iter_file_lines(path)
+            for line in iterator:
+                key, value = extract_parline_key_value(line)
+                # This marks the start of a new event
+                if key == "source_surf" and len(source_kwargs):
+                    sources.append(Source(**source_kwargs))
+                source_kwargs[key] = value
+            # also need to scoop up last event
+            sources.append(Source(**source_kwargs))
+        assert len(sources) == source_count
+        return sources
 
 
 class ReceiverSet(SpecsterModel):
@@ -369,7 +418,7 @@ class ReceiverSets(AbstractParameterModel):
     receiver_sets: List[ReceiverSet]
 
     @classmethod
-    def read_receiver_sets(cls, nreceiversets, iterator):
+    def read_receiver_sets(cls, nreceiversets, iterator, **kwargs):
         """Read the receiver sets from the iterator."""
         receiver_set_count = int(nreceiversets)
         out = dict(
@@ -384,7 +433,7 @@ class ReceiverSets(AbstractParameterModel):
                 key, value = extract_parline_key_value(next(iterator))
                 rec_dict[key] = value
             out["receiver_sets"].append(ReceiverSet(**rec_dict))
-        assert len(out['receiver_sets']) == receiver_set_count
+        assert len(out["receiver_sets"]) == receiver_set_count
         return cls(**out)
 
 
@@ -447,7 +496,9 @@ class BoundaryConditions(AbstractParameterModel):
     )
     nelem_pml_thickness: int = Field(2, description="number of pml elements on edges")
     rotate_pml_activate: bool = Field(False, description="Whether to rotate the PMLs")
-    rotate_pml_angle: SpecFloat = Field(30.0, description="Angle to rotate PML (if at all)")
+    rotate_pml_angle: SpecFloat = Field(
+        30.0, description="Angle to rotate PML (if at all)"
+    )
     k_min_pml: SpecFloat = Field(1.0, description="advanced damping parameter")
     k_max_pml: SpecFloat = Field(1.0, description="advanced damping parameter")
     damping_change_factor_acoustic: SpecFloat = Field(
@@ -540,11 +591,13 @@ class Display(AbstractParameterModel):
 
 class JPEGDisplay(AbstractParameterModel):
     """Information for jpeg output."""
+
     output_color_image: bool = Field(
         True, description="If true, output jpeg color image"
     )
     imagetype_jpeg: Literal["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"] = Field(
-        1, description=dict_to_description("imagetype_jpeg", _ENUM_MAP["imagetype_jpeg"])
+        1,
+        description=dict_to_description("imagetype_jpeg", _ENUM_MAP["imagetype_jpeg"]),
     )
     factor_subsample_images: SpecFloat = Field(
         1.0, description="factor to subsample or oversample (<1)"
@@ -559,7 +612,8 @@ class JPEGDisplay(AbstractParameterModel):
         0.30, description="Non linear display to enhance small features"
     )
     draw_sources_and_receivers: bool = Field(
-        True, description="Display sources as orange crosses and sources as green squares"
+        True,
+        description="Display sources as orange crosses and sources as green squares",
     )
     draw_water_in_blue: bool = Field(
         True, description="Display acoustic layers in blue"
@@ -571,45 +625,41 @@ class JPEGDisplay(AbstractParameterModel):
 
 class PostScriptDisplay(AbstractParameterModel):
     """Information for postscript output."""
+
     output_postscript_snapshot: bool = Field(
         True, description="Output postscript snapshots"
     )
     imagetype_postscript: Literal["1", "2", "3"] = Field(
-        2, description=dict_to_description("imagetype_postscript", _ENUM_MAP["imagetype_postscript"])
+        2,
+        description=dict_to_description(
+            "imagetype_postscript", _ENUM_MAP["imagetype_postscript"]
+        ),
     )
-    meshvect: bool = Field(
-        True, description="Display mesh on postscript."
-    )
-    modelvect: bool = Field(
-        False, description="display velocity model on plot"
-    )
-    boundvect: bool = Field(
-        True, description="Display boundary conditions."
-    )
-    interpol: bool = Field(
-        True, description="Interpolate GLL onto regular grid"
-    )
+    meshvect: bool = Field(True, description="Display mesh on postscript.")
+    modelvect: bool = Field(False, description="display velocity model on plot")
+    boundvect: bool = Field(True, description="Display boundary conditions.")
+    interpol: bool = Field(True, description="Interpolate GLL onto regular grid")
     pointsdisp: int = Field(
         6, description="Number of points in each direction for interpolation."
     )
     subsamp_postscript: bool = Field(
         1, description="subsampling of velocity model for post script plots"
     )
-    sizemax_arrows: SpecFloat = Field(
-        1.0, description="Max size for arrows in cm"
-    )
-    us_letter: bool = Field(
-        False, description="use US letter or European A4 paper"
-    )
+    sizemax_arrows: SpecFloat = Field(1.0, description="Max size for arrows in cm")
+    us_letter: bool = Field(False, description="use US letter or European A4 paper")
 
 
 class WaveDumpDisplay(AbstractParameterModel):
     """Controls dumping wavefield to disk."""
+
     output_wavefield_dumps: bool = Field(
         False, description="Output wavefield to disk, creates large files!"
     )
     imagetype_wavefield_dumps: Literal["1", "2", "3", "4"] = Field(
-        1, description=dict_to_description("imagetype_wavefield_dumps", _ENUM_MAP["imagetype_wavefield_dumps"])
+        1,
+        description=dict_to_description(
+            "imagetype_wavefield_dumps", _ENUM_MAP["imagetype_wavefield_dumps"]
+        ),
     )
     use_binary_for_wavefield_dumps: bool = Field(
         False, description="If True, use binary format else ascii format."
@@ -637,6 +687,7 @@ class RunParameters(AbstractParameterModel):
     """
     Parameters contained in the Par_file.
     """
+
     # fixed width for parameter names
     _param_name_padding = 32
     # fixed with for value field
@@ -697,6 +748,7 @@ _MULTILINE_KEYS = {
     "nbregions": (Regions.read_regions, "regions"),
     "nbmodels": (MaterialModels.read_material_properties, "material_models"),
     "nreceiversets": (ReceiverSets.read_receiver_sets, "receiver_sets"),
+    "nsources": (Sources.read_sources, "sources"),
 }
 
 
@@ -711,7 +763,7 @@ def parse_parfile(path: Path) -> dict:
         for standard specfem runs.
     """
     out = {}
-    iterator = (x for x in path.read_text().split("\n") if not x.startswith("#") and x)
+    iterator = iter_file_lines(path)
     for line in iterator:
         # simple key/value
         if "=" in line:
@@ -720,7 +772,7 @@ def parse_parfile(path: Path) -> dict:
             # Need to handle special parsing of some keys
             if key in _MULTILINE_KEYS:
                 func, name = _MULTILINE_KEYS[key]
-                out[name] = func(value, iterator)
+                out[name] = func(value, iterator, path=path)
         else:
             msg = f"Unhandled line: \n{line}\n in {path}"
             raise UnhandledParFileLine(msg)
