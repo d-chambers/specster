@@ -4,33 +4,40 @@ Module for reading/writing parfiles.
 from pathlib import Path
 from typing import List, Literal, Optional, Union
 
-from pydantic import Field, FilePath
+from pydantic import Field
 
 from specster.constants import _ENUM_MAP, _MEANING_MAP, _SUB_VALUES
 from specster.exceptions import UnhandledParFileLine
-from specster.utils import SpecFloat, SpecsterModel, dict_to_description
+from specster.utils import SpecFloat, SpecsterModel, dict_to_description, extract_parline_key_value, \
+    parse_params_into_model
+
 
 # --- Material Models
 
 
-def extract_parline_key_value(line):
-    """Extract key/value pairs from a single line of the par file."""
-    key_value = line.split("=")
-    key = key_value[0].strip().lower()
-    value = key_value[1].split("#")[0].strip()
-    return key, _SUB_VALUES.get(value, value)
+class AbstractParameterModel(SpecsterModel):
+    """Abstract class for defining specfem parameter models."""
+
+    @classmethod
+    def init_from_dict(cls, data_dict):
+        """Init class, and subclasses, from a dict of values"""
+        my_fields = set(cls.__fields__)
+        nested_models = {
+            k: v.type_ for k, v in cls.__fields__.items()
+            if hasattr(v.type_, "init_from_dict")
+               # if the key is already the right type we skip it
+               and not isinstance(data_dict.get(k), v.type_)
+        }
+        # get inputs for this model
+        needed_inputs = {k: v for k, v in data_dict.items() if k in my_fields}
+        # add nested models
+        for field_name, model in nested_models.items():
+            needed_inputs[field_name] = model.init_from_dict(data_dict)
+        return cls(**needed_inputs)
 
 
-def parse_params_into_model(model: SpecsterModel, params):
-    """Read params from a sequence into pydantic model."""
-    field_names = list(model.__fields__)
-    assert len(params) == len(field_names), "names should match args"
-    input_dict = {i: v for i, v in zip(field_names, params)}
-    return model(**input_dict)
-
-
-class AbstractModelType(SpecsterModel):
-    """Abstract type for models."""
+class AbstractMaterialModelType(SpecsterModel):
+    """Abstract type for material models."""
 
     _model_type = None
     _type_cls_map = {}  # {type: cls}
@@ -41,14 +48,14 @@ class AbstractModelType(SpecsterModel):
     @classmethod
     def read_line(cls, line):
         """Read lines to create class instance."""
-        params = line.split(" ")
+        params = line.split()
         assert int(params[1]) == int(cls._model_type), "Wrong model type!"
         # need to strip out model type, if we got here its already handled.
         params_sub = [params[0]] + params[2:]
         return parse_params_into_model(cls, params_sub)
 
 
-class ElasticModel(AbstractModelType):
+class ElasticModel(AbstractMaterialModelType):
     """
     Covers acoustic and elastic material models.
 
@@ -66,19 +73,19 @@ class ElasticModel(AbstractModelType):
     rho: SpecFloat = Field(description="density")
     Vp: SpecFloat = Field(description="P velocity")
     Vs: SpecFloat = Field(description="S velocity")
-    void1_: Literal["0"] = 0
-    void2_: Literal["0"] = 0
+    void1_: str = "0"
+    void2_: str = "0"
     QKappa: SpecFloat = Field(9999, description="P quality factor")
     Qmu: SpecFloat = Field(9999, description="S quality factor")
-    void3_: Literal["0"] = 0
-    void4_: Literal["0"] = 0
-    void5_: Literal["0"] = 0
-    void6_: Literal["0"] = 0
-    void7_: Literal["0"] = 0
-    void8_: Literal["0"] = 0
+    void3_: str = "0"
+    void4_: str = "0"
+    void5_: str = "0"
+    void6_: str = "0"
+    void7_: str = "0"
+    void8_: str = "0"
 
 
-class AnisotropicModel(AbstractModelType):
+class AnisotropicModel(AbstractMaterialModelType):
     """
     Covers anisotropic case
 
@@ -92,56 +99,76 @@ class AnisotropicModel(AbstractModelType):
 
     _model_type = 2  # fixed type
     model_number: int
-    rho: float = Field(description="density")
-    c11: float
-    c13: float
-    c15: float
-    c33: float
-    c35: float
-    c55: float
-    c12: float
-    c23: float
-    c25: float
-    c22: float
-    QKappa: float = Field(9999, description="P quality factor")
-    Qmu: float = Field(9999, description="S quality factor")
+    rho: SpecFloat = Field(description="density")
+    c11: SpecFloat
+    c13: SpecFloat
+    c15: SpecFloat
+    c33: SpecFloat
+    c35: SpecFloat
+    c55: SpecFloat
+    c12: SpecFloat
+    c23: SpecFloat
+    c25: SpecFloat
+    c22: SpecFloat
+    QKappa: SpecFloat = Field(9999, description="P quality factor")
+    Qmu: SpecFloat = Field(9999, description="S quality factor")
 
 
-class PoroelasticModel(AbstractModelType):
+class PoroelasticModel(AbstractMaterialModelType):
     """Model describing poroelastic material"""
 
-    _model_type = 2  # fixed type
+    _model_type = 3  # fixed type
     model_number: int
-    rhos: float
-    rhof: float
-    phi: float
-    c: float
-    kxx: float
-    kxz: float
-    kzz: float
-    Ks: float
-    Kf: float
-    Kfr: float
-    etaf: float
-    mufr: float
-    Qmu: float
+    rhos: SpecFloat
+    rhof: SpecFloat
+    phi: SpecFloat
+    c: SpecFloat
+    kxx: SpecFloat
+    kxz: SpecFloat
+    kzz: SpecFloat
+    Ks: SpecFloat
+    Kf: SpecFloat
+    Kfr: SpecFloat
+    etaf: SpecFloat
+    mufr: SpecFloat
+    Qmu: SpecFloat
 
 
-class MaterialModels(SpecsterModel):
+class TomoModel(AbstractMaterialModelType):
+    """Tomography model?"""
+
+    _model_type = -1  # fixed type
+    model_number: int
+    void1_: str = "0"
+    void2_: str = "0"
+    void3_: str = "0"
+    void4_: str = "0"
+    void5_: str = "0"
+    void6_: str = "0"
+    void7_: str = "0"
+    void8_: str = "0"
+    void9_: str = "0"
+    void10_: str = "0"
+    void11_: str = "0"
+    void12_: str = "0"
+    void13_: str = "0"
+
+
+class MaterialModels(AbstractParameterModel):
     """
     Class to hold information about material properties.
     """
 
     nbmodels: Optional[int]
-    models: List[Union[ElasticModel, AnisotropicModel, PoroelasticModel]]
-    tomography_file: Optional[FilePath] = Field(
+    models: List[AbstractMaterialModelType]
+    tomography_file: Optional[Path] = Field(
         None, description="External tomography file"
     )
 
     @classmethod
     def read_material_properties(cls, nbmodels, iterator):
         """Read material properties"""
-        model_type_key = AbstractModelType._type_cls_map
+        model_type_key = AbstractMaterialModelType._type_cls_map
         out = {
             "nbmodels": int(nbmodels),
             "models": [],
@@ -178,7 +205,7 @@ class Region2D(SpecsterModel):
         return parse_params_into_model(cls, line.split())
 
 
-class Regions(SpecsterModel):
+class Regions(AbstractParameterModel):
     """Tracks regions in the model."""
 
     nbregions: int
@@ -194,7 +221,7 @@ class Regions(SpecsterModel):
         return cls(nbregions=nbregions, regions=regions)
 
 
-class Mesh(SpecsterModel):
+class Mesh(AbstractParameterModel):
     """Controls the meshing parameters (under MESH section)."""
 
     # type of partitioning
@@ -203,12 +230,12 @@ class Mesh(SpecsterModel):
             "partitioning_type", _ENUM_MAP["partitioning_type"]
         )
     )
-    ngnod: Literal[4, 9] = Field(
-        9,
+    ngnod: Literal["4", "9"] = Field(
+        "9",
         description="number of control nodes per element (4 or 9)",
     )
-    setup_with_binary_database: Literal[0, 1, 2] = Field(
-        0,
+    setup_with_binary_database: Literal["0", "1", "2"] = Field(
+        "0",
         description=dict_to_description(
             "setup_with_binary_database", _ENUM_MAP["setup_with_binary_database"]
         ),
@@ -216,12 +243,12 @@ class Mesh(SpecsterModel):
     model: Literal[tuple(_MEANING_MAP["model"])] = Field(
         "default", description=dict_to_description("model", _MEANING_MAP["model"])
     )
-    model: Literal[tuple(_MEANING_MAP["save_model"])] = Field(
+    save_model: Literal[tuple(_MEANING_MAP["save_model"])] = Field(
         "default", description=dict_to_description("model", _MEANING_MAP["model"])
     )
 
 
-class Attenuation(SpecsterModel):
+class Attenuation(AbstractParameterModel):
     """Controls the attenuation parameters (under Attenuation section)."""
 
     attenuation_viscoelastic: bool = Field(
@@ -237,7 +264,7 @@ class Attenuation(SpecsterModel):
         ge=3,
         description="number of standard linear solids for attenuation",
     )
-    attenuation_f0_reference: float = Field(
+    attenuation_f0_reference: SpecFloat = Field(
         5.196, description="reference attenuation freq, see docs"
     )
     read_velocities_at_f0: bool = Field(
@@ -251,17 +278,17 @@ class Attenuation(SpecsterModel):
     attenuation_poro_fluid_part = Field(
         False, description="attenuation for the fluid part of poroelastic parts"
     )
-    q0_poroelastic: float = Field(
+    q0_poroelastic: SpecFloat = Field(
         1, description="Quality factor for viscous attenuation"
     )
-    freq0_poroelastic: float = Field(
+    freq0_poroelastic: SpecFloat = Field(
         10,
         description="frequency for viscous attenuation",
     )
     undo_attenuation_and_or_pml: bool = Field(
         False, description="Undo attenuation for sensitivity kernel calc."
     )
-    nt_dump_attenuation: float = Field(
+    nt_dump_attenuation: SpecFloat = Field(
         500, description="how often to dump restart files in sensitivity calc."
     )
     no_backward_reconstruction: bool = Field(
@@ -269,7 +296,7 @@ class Attenuation(SpecsterModel):
     )
 
 
-class Sources(SpecsterModel):
+class Sources(AbstractParameterModel):
     """Controls the source parameters (under Source section)."""
 
     nsources: int = Field(1, description="number of sources")
@@ -295,8 +322,8 @@ class Sources(SpecsterModel):
     acoustic_forcing: bool = Field(
         False, description="forcing of an acoustic medium with a rigid interface"
     )
-    noise_source_time_function_type: Literal[1, 2, 3, 4] = Field(
-        4,
+    noise_source_time_function_type: Literal["1", "2", "3", "4"] = Field(
+        "4",
         description=dict_to_description(
             "noise_source_time_function_type",
             _ENUM_MAP["noise_source_time_function_type"],
@@ -309,16 +336,16 @@ class ReceiverSet(SpecsterModel):
     """A single receiver set."""
 
     nrec: int = Field(11, description="number of receivers")
-    xdeb: float = Field(
+    xdeb: SpecFloat = Field(
         300.0,
         description="first receiver x in meters",
     )
-    zdeb: float = Field(2200.0, description="first receiver z in meters")
-    xfin: float = Field(
+    zdeb: SpecFloat = Field(2200.0, description="first receiver z in meters")
+    xfin: SpecFloat = Field(
         3700.0,
         description="last receiver x in meters",
     )
-    zfin: float = Field(
+    zfin: SpecFloat = Field(
         2200.0,
         description="last receiver z in meters",
     )
@@ -328,7 +355,7 @@ class ReceiverSet(SpecsterModel):
     )
 
 
-class ReceiverSets(SpecsterModel):
+class ReceiverSets(AbstractParameterModel):
     """Class containing multiple receiver sets."""
 
     nreceiversets: int = Field(2, description="Number of receiver sets")
@@ -357,14 +384,15 @@ class ReceiverSets(SpecsterModel):
                 key, value = extract_parline_key_value(next(iterator))
                 rec_dict[key] = value
             out["receiver_sets"].append(ReceiverSet(**rec_dict))
+        assert len(out['receiver_sets']) == receiver_set_count
         return cls(**out)
 
 
-class Receivers(SpecsterModel):
+class Receivers(AbstractParameterModel):
     """Controls the receiver parameters (under Receiver section)."""
 
-    seismotype: Literal[1, 2, 3, 4, 5, 6] = Field(
-        1, description=dict_to_description("seismotype", _ENUM_MAP["seismotype"])
+    seismotype: Literal["1", "2", "3", "4", "5", "6"] = Field(
+        "1", description=dict_to_description("seismotype", _ENUM_MAP["seismotype"])
     )
     nstep_between_output_seismos: int = Field(
         10_000, description="Number of steps before saving seismograms"
@@ -397,7 +425,7 @@ class Receivers(SpecsterModel):
     receiver_sets: ReceiverSets
 
 
-class AdjointKernel(SpecsterModel):
+class AdjointKernel(AbstractParameterModel):
     """Controls the adjoint kernel parameters (under adjoint kernel section)."""
 
     save_ascii_kernels: bool = Field(
@@ -411,7 +439,7 @@ class AdjointKernel(SpecsterModel):
     )
 
 
-class BoundaryConditions(SpecsterModel):
+class BoundaryConditions(AbstractParameterModel):
     """Controls the boundary condition parameters (under boundary section)."""
 
     pml_boundary_conditions: bool = Field(
@@ -419,7 +447,7 @@ class BoundaryConditions(SpecsterModel):
     )
     nelem_pml_thickness: int = Field(2, description="number of pml elements on edges")
     rotate_pml_activate: bool = Field(False, description="Whether to rotate the PMLs")
-    rotate_pml_angle: float = Field(30.0, description="Angle to rotate PML (if at all)")
+    rotate_pml_angle: SpecFloat = Field(30.0, description="Angle to rotate PML (if at all)")
     k_min_pml: SpecFloat = Field(1.0, description="advanced damping parameter")
     k_max_pml: SpecFloat = Field(1.0, description="advanced damping parameter")
     damping_change_factor_acoustic: SpecFloat = Field(
@@ -442,45 +470,45 @@ class BoundaryConditions(SpecsterModel):
     )
 
 
-class ExternalMeshing:
+class ExternalMeshing(AbstractParameterModel):
     """Controls the external meshing parameters."""
 
     read_external_mesh: bool = Field(
         False, description="read an external mesh for velocity model"
     )
-    mesh_file: Optional[FilePath] = Field(
+    mesh_file: Optional[Path] = Field(
         "./DATA/mesh_file", description="Path to mesh file"
     )
-    node_coords_file: Optional[FilePath] = Field(
+    node_coords_file: Optional[Path] = Field(
         "./DATA/nodes_coords_dile", description="Path to mesh coordinates"
     )
-    material_file: Optional[FilePath] = Field(
+    material_file: Optional[Path] = Field(
         "./DATA/material_file", description="Path to material file"
     )
-    free_surface_file: Optional[FilePath] = Field(
+    free_surface_file: Optional[Path] = Field(
         "./DATA/free_surface_file", description="Path to free surface file"
     )
-    axial_element_file: Optional[FilePath] = Field(
+    axial_element_file: Optional[Path] = Field(
         "./DATA/axial_element_file", description="Path to mesh file"
     )
-    absorbing_surface_file: Optional[FilePath] = Field(
+    absorbing_surface_file: Optional[Path] = Field(
         "./DATA/absorbing_surface_file", description="Path to mesh file"
     )
-    acoustic_forcing_surface_file: Optional[FilePath] = Field(
+    acoustic_forcing_surface_file: Optional[Path] = Field(
         "./DATA/Surf_acforcing_Bottom_enforcing_mesh",
     )
-    absorbing_cpml_file: Optional[FilePath] = Field(
+    absorbing_cpml_file: Optional[Path] = Field(
         "./DATA/absorbing_cpml_file", description="File with CPML element numbers"
     )
-    tangential_dtection_curve_file: Optional[FilePath] = Field(
+    tangential_dtection_curve_file: Optional[Path] = Field(
         "./DATA/courbe_eros_nodes", description="Contains curve delineating model"
     )
 
 
-class InternalMeshing(SpecsterModel):
+class InternalMeshing(AbstractParameterModel):
     """Controls the internal meshing parameters."""
 
-    interfacesfile: Optional[FilePath] = Field(
+    interfacesfile: Optional[Path] = Field(
         "./DATA/interfaces.dat", description="File with interfaces"
     )
     xmin: SpecFloat = Field(0.0, description="abscissa of left side of the model")
@@ -493,7 +521,7 @@ class InternalMeshing(SpecsterModel):
     regions: Regions
 
 
-class Display(SpecsterModel):
+class Display(AbstractParameterModel):
     """Controls the display parameters."""
 
     ntsetp_between_output_info: int = Field(
@@ -510,25 +538,105 @@ class Display(SpecsterModel):
     )
 
 
-class Visualizations(SpecsterModel):
+class JPEGDisplay(AbstractParameterModel):
+    """Information for jpeg output."""
+    output_color_image: bool = Field(
+        True, description="If true, output jpeg color image"
+    )
+    imagetype_jpeg: Literal["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"] = Field(
+        1, description=dict_to_description("imagetype_jpeg", _ENUM_MAP["imagetype_jpeg"])
+    )
+    factor_subsample_images: SpecFloat = Field(
+        1.0, description="factor to subsample or oversample (<1)"
+    )
+    use_constant_max_amplitude: bool = Field(
+        False, description="Use global maximum for image normalization"
+    )
+    constant_max_amplitude_to_use: SpecFloat = Field(
+        116e4, description="constant maximum amplitude"
+    )
+    power_display_color: SpecFloat = Field(
+        0.30, description="Non linear display to enhance small features"
+    )
+    draw_sources_and_receivers: bool = Field(
+        True, description="Display sources as orange crosses and sources as green squares"
+    )
+    draw_water_in_blue: bool = Field(
+        True, description="Display acoustic layers in blue"
+    )
+    use_snapshot_number_in_filename: bool = Field(
+        False, description="use the snapshot number in file name."
+    )
+
+
+class PostScriptDisplay(AbstractParameterModel):
+    """Information for postscript output."""
+    output_postscript_snapshot: bool = Field(
+        True, description="Output postscript snapshots"
+    )
+    imagetype_postscript: Literal["1", "2", "3"] = Field(
+        2, description=dict_to_description("imagetype_postscript", _ENUM_MAP["imagetype_postscript"])
+    )
+    meshvect: bool = Field(
+        True, description="Display mesh on postscript."
+    )
+    modelvect: bool = Field(
+        False, description="display velocity model on plot"
+    )
+    boundvect: bool = Field(
+        True, description="Display boundary conditions."
+    )
+    interpol: bool = Field(
+        True, description="Interpolate GLL onto regular grid"
+    )
+    pointsdisp: int = Field(
+        6, description="Number of points in each direction for interpolation."
+    )
+    subsamp_postscript: bool = Field(
+        1, description="subsampling of velocity model for post script plots"
+    )
+    sizemax_arrows: SpecFloat = Field(
+        1.0, description="Max size for arrows in cm"
+    )
+    us_letter: bool = Field(
+        False, description="use US letter or European A4 paper"
+    )
+
+
+class WaveDumpDisplay(AbstractParameterModel):
+    """Controls dumping wavefield to disk."""
+    output_wavefield_dumps: bool = Field(
+        False, description="Output wavefield to disk, creates large files!"
+    )
+    imagetype_wavefield_dumps: Literal["1", "2", "3", "4"] = Field(
+        1, description=dict_to_description("imagetype_wavefield_dumps", _ENUM_MAP["imagetype_wavefield_dumps"])
+    )
+    use_binary_for_wavefield_dumps: bool = Field(
+        False, description="If True, use binary format else ascii format."
+    )
+
+
+class Visualizations(AbstractParameterModel):
     """Controls Other visualization parameters."""
 
     ntsetp_between_output_images: int = Field(
         100, description="How often (timestep) output is dumped for visualization"
     )
-    cutsnaps: float = Field(
+    cutsnaps: SpecFloat = Field(
         1.0, description="minimum amplitude kept in % for JPEG/PostScript"
     )
-    output_color_image: bool = Field(
-        True, description="If true, output jpeg color image"
-    )
+    # --- jpeg parameters
+    jpeg_display: JPEGDisplay
+    # --- postscript parameters
+    postscript_display: PostScriptDisplay
+    # --- wavedump parameters
+    wavefield_dump: WaveDumpDisplay
 
 
-class RunParameters(SpecsterModel):
+class RunParameters(AbstractParameterModel):
     """
     Parameters contained in the Par_file.
     """
-
     # fixed width for parameter names
     _param_name_padding = 32
     # fixed with for value field
@@ -546,7 +654,7 @@ class RunParameters(SpecsterModel):
     save_forward: bool = Field(False, description="forward modeling should be saved")
     nproc: int = Field(1, description="number of processors to use.")
     nstep: int = Field(1600, description="total number of time steps")
-    dt: float = Field(1.1e-3, description="time increment")
+    dt: SpecFloat = Field(1.1e-3, description="time increment")
     time_stepping_scheme: int = Field(
         description=dict_to_description(
             "time_stepping_scheme", _ENUM_MAP["time_stepping_scheme"]
@@ -573,44 +681,47 @@ class RunParameters(SpecsterModel):
     internal_meshing: InternalMeshing
     # --- Display parameters
     display: Display
-
-    #
+    # --- Visualization parameters (no idea why this is different from display)
+    visualizations: Visualizations
+    # Values at end of par file, no subsection
     number_of_simultaneous_runs: int = Field(
         1, description="complicated parameter, see specfem docs for details"
     )
     gpu_mode: bool = Field(True, description="If GPUs should be used")
 
 
+# keys that require weird parsing rules. The key triggers
+# the calling of the function and the output is stored in
+# the second argument
 _MULTILINE_KEYS = {
-    "nbregions": Regions.read_regions,
-    "nbmodels": MaterialModels.read_material_properties,
-    "nreceiversets": ReceiverSets.read_receiver_sets,
+    "nbregions": (Regions.read_regions, "regions"),
+    "nbmodels": (MaterialModels.read_material_properties, "material_models"),
+    "nreceiversets": (ReceiverSets.read_receiver_sets, "receiver_sets"),
 }
 
 
-def read_parfile(path: Union[str, Path]) -> RunParameters:
+def parse_parfile(path: Path) -> dict:
     """
-    Read a Par_file.
+    Read a Par_file into a dictionary.
 
     Parameters
     ----------
     path
         A path to the parameters file. Should be in the DATA directory
         for standard specfem runs.
-
     """
-
     out = {}
     iterator = (x for x in path.read_text().split("\n") if not x.startswith("#") and x)
     for line in iterator:
         # simple key/value
         if "=" in line:
             key, value = extract_parline_key_value(line)
+            out[key] = value
+            # Need to handle special parsing of some keys
             if key in _MULTILINE_KEYS:
-                func = _MULTILINE_KEYS[key]
-                out[key] = func(value, iterator)
-            else:
-                out[key] = value
+                func, name = _MULTILINE_KEYS[key]
+                out[name] = func(value, iterator)
         else:
             msg = f"Unhandled line: \n{line}\n in {path}"
             raise UnhandledParFileLine(msg)
+    return out

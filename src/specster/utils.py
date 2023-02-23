@@ -5,13 +5,14 @@ from typing import Union
 
 from pydantic import BaseModel
 
+from .constants import _SUB_VALUES
+
 
 class SpecsterModel(BaseModel):
     """Abstract model in case we need to modify base behavior."""
 
     class Config:
         """Configuration for models."""
-
         validate_assignment = True  # validators run on assignment
 
 
@@ -71,3 +72,19 @@ def dict_to_description(param_name, somedict):
     param_str = "".join([f"{i}: {v}\n" for i, v in somedict.items()])
     out = f"{param_name} supports several params including:\n" f"{param_str}"
     return out
+
+
+def extract_parline_key_value(line):
+    """Extract key/value pairs from a single line of the par file."""
+    key_value = line.split("=")
+    key = key_value[0].strip().lower()
+    value = key_value[1].split("#")[0].strip()
+    return key, _SUB_VALUES.get(value, value)
+
+
+def parse_params_into_model(model: SpecsterModel, params):
+    """Read params from a sequence into pydantic model."""
+    field_names = list(model.__fields__)
+    assert len(params) == len(field_names), "names should match args"
+    input_dict = {i: v for i, v in zip(field_names, params)}
+    return model(**input_dict)

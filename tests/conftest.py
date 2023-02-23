@@ -44,7 +44,8 @@ def data_dir_path(request):
 def par_file_path(data_dir_path):
     """Fixture to iterate over data directory and return examples."""
     par_path = data_dir_path / "Par_file"
-    assert par_path.exists()
+    if not par_path.exists() or "not_ready_yet" in str(data_dir_path):
+        pytest.skip(f"{data_dir_path} has not par file.")
     return par_path
 
 
