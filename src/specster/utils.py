@@ -11,6 +11,16 @@ from .constants import _SUB_VALUES
 class SpecsterModel(BaseModel):
     """Abstract model in case we need to modify base behavior."""
 
+    @classmethod
+    def read_line(cls, params):
+        """Read params from a sequence into pydantic model."""
+        if isinstance(params, str):
+            params = params.split()
+        field_names = list(cls.__fields__)
+        assert len(params) == len(field_names), "names should match args"
+        input_dict = {i: v for i, v in zip(field_names, params)}
+        return cls(**input_dict)
+
     class Config:
         """Configuration for models."""
 
@@ -81,14 +91,6 @@ def extract_parline_key_value(line):
     key = key_value[0].strip().lower()
     value = key_value[1].split("#")[0].strip()
     return key, _SUB_VALUES.get(value, value)
-
-
-def parse_params_into_model(model: SpecsterModel, params):
-    """Read params from a sequence into pydantic model."""
-    field_names = list(model.__fields__)
-    assert len(params) == len(field_names), "names should match args"
-    input_dict = {i: v for i, v in zip(field_names, params)}
-    return model(**input_dict)
 
 
 def iter_file_lines(path, ignore="#"):

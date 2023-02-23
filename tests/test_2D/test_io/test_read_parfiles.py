@@ -73,3 +73,15 @@ class TestSources:
         assert sources.nsources == len(sources.sources)
         for source in sources.sources:
             assert isinstance(source, pf.Source)
+
+
+class TestStations:
+    """Ensure external stations are read in ."""
+
+    def test_external_station(self, run_parameters_2d):
+        """Ensure external station file is read if used."""
+        if not run_parameters_2d.receivers.use_existing_stations:
+            pytest.skip("No external stations on this file.")
+        assert len(run_parameters_2d.receivers.stations)
+        for station in run_parameters_2d.receivers.stations:
+            assert isinstance(station, pf.Station)

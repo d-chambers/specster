@@ -17,10 +17,19 @@ from specster.utils import (
     dict_to_description,
     extract_parline_key_value,
     iter_file_lines,
-    parse_params_into_model,
 )
 
 SOURCE_REG = re.compile(fnmatch.translate("source*"), re.IGNORECASE)
+
+
+def read_stations(external_stations, iter, path):
+    """Read stations from an external file."""
+    if not external_stations:  # nothing to do
+        return []
+    station_path = Path(path.parent) / "STATIONS"
+    assert station_path.exists()
+    stations = [Station.read_line(line) for line in iter_file_lines(station_path)]
+    return stations
 
 
 # --- Material Models
@@ -42,7 +51,7 @@ class AbstractMaterialModelType(SpecsterModel):
         assert int(params[1]) == int(cls._model_type), "Wrong model type!"
         # need to strip out model type, if we got here its already handled.
         params_sub = [params[0]] + params[2:]
-        return parse_params_into_model(cls, params_sub)
+        return super().read_line(params_sub)
 
 
 class ElasticModel(AbstractMaterialModelType):
@@ -188,11 +197,6 @@ class Region2D(SpecsterModel):
     nzmin: int = Field(ge=1, description="starting z element")
     nzmax: int = Field(ge=1, description="ending z element")
     material_number: int = Field(ge=1, description="material applied to region")
-
-    @classmethod
-    def read_line(cls, line):
-        """Create region2D from an input line"""
-        return parse_params_into_model(cls, line.split())
 
 
 class Regions(AbstractParameterModel):
@@ -381,6 +385,18 @@ class Sources(AbstractParameterModel):
         return sources
 
 
+class Station(SpecsterModel):
+    """A single station."""
+
+    station: str = Field("001", description="station name")
+    network: str = Field("UU", description="network name")
+    xs: SpecFloat = Field(0.0, description="X location in meters")
+    xz: SpecFloat = Field(0.0, description="Z location in meters")
+    # TODO: See what these columns actually are
+    void1_: str = ""
+    void2_: str = ""
+
+
 class ReceiverSet(SpecsterModel):
     """A single receiver set."""
 
@@ -472,6 +488,9 @@ class Receivers(AbstractParameterModel):
     )
     # parse receiver sets
     receiver_sets: ReceiverSets
+
+    # stations from external files
+    stations: List[Station]
 
 
 class AdjointKernel(AbstractParameterModel):
@@ -749,6 +768,7 @@ _MULTILINE_KEYS = {
     "nbmodels": (MaterialModels.read_material_properties, "material_models"),
     "nreceiversets": (ReceiverSets.read_receiver_sets, "receiver_sets"),
     "nsources": (Sources.read_sources, "sources"),
+    "use_existing_stations": (read_stations, "stations"),
 }
 
 
