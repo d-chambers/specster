@@ -40,7 +40,7 @@ def read_ascii_trace(path):
     return obspy.Trace(disp, headers)
 
 
-def save_trace(tr, filename):
+def write_ascii_trace(tr, filename):
     """Writes out the traces as an ASCII file. Uses b value as the beginning."""
     data = np.zeros((len(tr.data), 2))
     data[:, 0] = tr.times() + tr.stats.b

@@ -4,11 +4,13 @@ Main control class for interacting with specfem.
 from __future__ import annotations
 
 import copy
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Optional, Self
 
 import specster
+from specster.utils.callout import run_command
 
 from .io import SpecParameters2D
 
@@ -78,8 +80,28 @@ class Control2d:
             out[p.name] = p
         return out
 
-    def xmeshfem2d(self):
-        """Run the 2D mesher."""
+    def get_output_path(self):
+        """Get the output directory path, create it if it isn't there."""
+        expected = self.base_path / "OUTPUT_FILES"
+        expected.mkdir(exist_ok=True, parents=True)
+        return expected
 
-    def xspecfem2d(self):
+    def clear_outputs(self):
+        """Remove output directory."""
+        path = self.get_output_path()
+        shutil.rmtree(path)
+
+    def _run_spec_command(self, command: str, print_=True):
+        """Run a specfem command."""
+        self.get_output_path()
+        bin = self._spec_bin_path / command
+        assert bin.exists()
+        return run_command(str(bin), cwd=self.base_path, print_=print_)
+
+    def xmeshfem2d(self, print_=True):
+        """Run the 2D mesher."""
+        return self._run_spec_command("xmeshfem2D", print_=print_)
+
+    def xspecfem2d(self, print_=True):
         """Run 2D specfem."""
+        return self._run_spec_command("xspecfem2D", print_=print_)
