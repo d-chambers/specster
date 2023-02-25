@@ -61,4 +61,3 @@
 ## Moving source parameters
 {{ dis.vx }}# Horizontal source velocity (m/s)
 {{ dis.vz }}# Vertical source velocity (m/s)
-

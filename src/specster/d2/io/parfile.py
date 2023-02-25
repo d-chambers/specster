@@ -10,15 +10,10 @@ from pydantic import Field
 
 from specster.constants import _ENUM_MAP, _MEANING_MAP
 from specster.exceptions import UnhandledParFileLine
-from specster.model import AbstractParameterModel
-from specster.utils import (
-    SpecFloat,
-    SpecsterModel,
-    dict_to_description,
-    extract_parline_key_value,
-    find_file_startswith,
-    iter_file_lines,
-)
+from specster.utils.misc import find_file_startswith
+from specster.utils.models import AbstractParameterModel, SpecFloat, SpecsterModel
+from specster.utils.parse import extract_parline_key_value, iter_file_lines
+from specster.utils.render import dict_to_description
 
 SOURCE_REG = re.compile(fnmatch.translate("source*"), re.IGNORECASE)
 

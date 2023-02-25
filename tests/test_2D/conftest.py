@@ -9,7 +9,7 @@ import pytest
 
 import specster
 import specster.d2.io.parfile as pf
-from specster.utils import find_file_startswith
+from specster.utils.misc import find_file_startswith
 
 TEST_PATH_2D = Path(__file__).absolute().parent
 

@@ -4,6 +4,8 @@ Configuration for specster.
 import os
 from pathlib import Path
 
+import pytest
+
 TEST_PATH = Path(__file__).absolute().parent
 
 TEST_DATA_PATH = TEST_PATH / "test_data"
@@ -18,3 +20,9 @@ def pytest_sessionstart(session):
     if os.environ.get("CI", False):
         pass
         # TODO need to set logic to load/cache/compile specfem
+
+
+@pytest.fixture(scope="session")
+def test_data_path():
+    """Return the test data path for the whole directory."""
+    return TEST_DATA_PATH
