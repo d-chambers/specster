@@ -8,7 +8,7 @@ from typing import Union
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
 
-from .constants import _SUB_VALUES
+from specster.constants import _SUB_VALUES
 
 
 class SpecsterModel(BaseModel):
