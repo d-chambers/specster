@@ -4,7 +4,7 @@ Module for reading/writing parfiles.
 import fnmatch
 import re
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Self
 
 from pydantic import Field
 
@@ -16,17 +16,18 @@ from specster.utils import (
     SpecsterModel,
     dict_to_description,
     extract_parline_key_value,
+    find_file_startswith,
     iter_file_lines,
 )
 
 SOURCE_REG = re.compile(fnmatch.translate("source*"), re.IGNORECASE)
 
 
-def read_stations(external_stations, iter, path):
+def read_stations(value, path, **kwargs):
     """Read stations from an external file."""
-    if not external_stations:  # nothing to do
+    if not value:  # nothing to do
         return []
-    station_path = Path(path.parent) / "STATIONS"
+    station_path = find_file_startswith(path.parent, "STATIONS")
     assert station_path.exists()
     stations = [Station.read_line(line) for line in iter_file_lines(station_path)]
     return stations
@@ -165,15 +166,15 @@ class MaterialModels(AbstractParameterModel):
     )
 
     @classmethod
-    def read_material_properties(cls, nbmodels, iterator, **kwargs):
+    def read_material_properties(cls, value, iterator, **kwargs):
         """Read material properties"""
         model_type_key = AbstractMaterialModelType._type_cls_map
         out = {
-            "nbmodels": int(nbmodels),
+            "nbmodels": int(value),
             "models": [],
         }
         models = []
-        for _ in range(int(nbmodels)):
+        for _ in range(int(value)):
             line = next(iterator)
             model_type = model_type_key[int(line.split()[1])]
             models.append(model_type.read_line(line))
@@ -206,13 +207,13 @@ class Regions(AbstractParameterModel):
     regions: List[Region2D]
 
     @classmethod
-    def read_regions(cls, nbregions, iterator, **kawrgs):
+    def read_regions(cls, value, iterator, **kawrgs):
         """Read material properties"""
         regions = []
-        for _ in range(int(nbregions)):
+        for _ in range(int(value)):
             line = next(iterator)
             regions.append(Region2D.read_line(line))
-        return cls(nbregions=nbregions, regions=regions)
+        return cls(nbregions=value, regions=regions)
 
 
 class Mesh(AbstractParameterModel):
@@ -364,9 +365,9 @@ class Sources(AbstractParameterModel):
     sources: List[Source]
 
     @staticmethod
-    def read_sources(nsources, iterator, path):
+    def read_sources(value, path, **kwargs):
         """Read the sources"""
-        source_count = int(nsources)
+        source_count = int(value)
         iterable = (x for x in path.parent.glob("*") if SOURCE_REG.match(str(x.name)))
         sorted_source_files = sorted(iterable, key=lambda x: x.name)
         sources = []
@@ -434,15 +435,18 @@ class ReceiverSets(AbstractParameterModel):
     receiver_sets: List[ReceiverSet]
 
     @classmethod
-    def read_receiver_sets(cls, nreceiversets, iterator, **kwargs):
+    def read_receiver_sets(cls, value, iterator, state, **kwargs):
         """Read the receiver sets from the iterator."""
-        receiver_set_count = int(nreceiversets)
+        receiver_set_count = int(value)
         out = dict(
             rec_count=receiver_set_count,
             anglerec=extract_parline_key_value(next(iterator))[1],
             rec_normal_to_surface=extract_parline_key_value(next(iterator))[1],
             receiver_sets=[],
         )
+        # Skip populating receivers if we don't use them
+        if state.get("use_existing_stations"):
+            return cls(**out)
         for _ in range(receiver_set_count):
             rec_dict = {}
             for _ in range(6):  # each receiver set has six lines
@@ -702,7 +706,7 @@ class Visualizations(AbstractParameterModel):
     wavefield_dump: WaveDumpDisplay
 
 
-class RunParameters(AbstractParameterModel):
+class SpecParameters2D(AbstractParameterModel):
     """
     Parameters contained in the Par_file.
     """
@@ -759,6 +763,23 @@ class RunParameters(AbstractParameterModel):
     )
     gpu_mode: bool = Field(True, description="If GPUs should be used")
 
+    @classmethod
+    def from_file(cls, path: Path) -> Self:
+        """Parameter data from file."""
+        data = parse_parfile(path)
+        return cls.init_from_dict(data)
+
+    def write_data(self, data_path):
+        """
+        Write out the parameter, station, and source files.
+
+        Parameters
+        ----------
+        data_path
+            A path to the new data directory. It will be created if it
+            doesn't exist.
+        """
+
 
 # keys that require weird parsing rules. The key triggers
 # the calling of the function and the output is stored in
@@ -783,6 +804,7 @@ def parse_parfile(path: Path) -> dict:
         for standard specfem runs.
     """
     out = {}
+    path = find_file_startswith(path)
     iterator = iter_file_lines(path)
     for line in iterator:
         # simple key/value
@@ -792,7 +814,12 @@ def parse_parfile(path: Path) -> dict:
             # Need to handle special parsing of some keys
             if key in _MULTILINE_KEYS:
                 func, name = _MULTILINE_KEYS[key]
-                out[name] = func(value, iterator, path=path)
+                out[name] = func(
+                    value=value,
+                    iterator=iterator,
+                    path=path,
+                    state=out,
+                )
         else:
             msg = f"Unhandled line: \n{line}\n in {path}"
             raise UnhandledParFileLine(msg)

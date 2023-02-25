@@ -9,6 +9,7 @@ import pytest
 
 import specster
 import specster.d2.io.parfile as pf
+from specster.utils import find_file_startswith
 
 TEST_PATH_2D = Path(__file__).absolute().parent
 
@@ -72,9 +73,22 @@ def par_dicts_2d(par_file_path):
 
 
 @pytest.fixture(scope="class")
-def run_parameters_2d(par_dicts_2d) -> pf.RunParameters:
+def run_parameters_2d(par_dicts_2d) -> pf.SpecParameters2D:
     """Return dictionaries of parameters for 2D test cases."""
-    return pf.RunParameters.init_from_dict(par_dicts_2d)
+    return pf.SpecParameters2D.init_from_dict(par_dicts_2d)
+
+
+@pytest.fixture(scope="class")
+def control_2d(data_dir_path):
+    """2D control instances."""
+    try:
+        find_file_startswith(data_dir_path, "Par_file")
+    except FileNotFoundError:
+        pytest.skip("Parfile doesn't exist")
+    if "not_ready_yet" in str(data_dir_path):
+        pytest.skip("not ready yet")
+    spec = specster.Control2d(data_dir_path)
+    return spec
 
 
 @pytest.fixture()

@@ -52,7 +52,7 @@ class TestReadReceivers:
         ]
         nlines = int(comment_free_lines[0].split("=")[1].strip())
         iterable = (x for x in comment_free_lines[1:])
-        out = pf.ReceiverSets.read_receiver_sets(nlines, iterable)
+        out = pf.ReceiverSets.read_receiver_sets(nlines, iterable, state={})
         assert isinstance(out, pf.ReceiverSets)
 
 
@@ -61,7 +61,7 @@ class TestParseExamplePars:
 
     def test_parse(self, run_parameters_2d):
         """Ensure each parfile can be read."""
-        assert isinstance(run_parameters_2d, pf.RunParameters)
+        assert isinstance(run_parameters_2d, pf.SpecParameters2D)
 
 
 class TestSources:
@@ -85,3 +85,25 @@ class TestStations:
         assert len(run_parameters_2d.receivers.stations)
         for station in run_parameters_2d.receivers.stations:
             assert isinstance(station, pf.Station)
+
+
+class TestDisp:
+    """Tests for displaying data lines."""
+
+    @pytest.fixture(scope="class")
+    def param_display(self, run_parameters_2d):
+        """Return display object for testing."""
+        return run_parameters_2d.disp
+
+    def test_toplevel_display(self, param_display):
+        """Ensure display works."""
+        title = param_display.title
+        assert isinstance(title, str)
+        assert len(title)
+        title_2 = param_display.TITLE
+        assert title_2 == title
+
+    def test_recursive_display(self, param_display):
+        """This should work for nested display as well."""
+        # sub = param_display.visualizations
+        # sub.postscript_display

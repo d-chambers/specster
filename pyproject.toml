@@ -48,6 +48,7 @@ dependencies = [
     "obspy",
     "obsplus",
     "matplotlib",
+    "jinja2",
 ]
 
 [project.optional-dependencies]
