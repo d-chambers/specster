@@ -4,7 +4,7 @@ Module for handling specster's settings/behavior.
 from pathlib import Path
 from typing import Literal, Optional
 
-from pydantic import BaseSettings, Field
+from pydantic import BaseSettings, Field, root_validator
 
 import specster
 
@@ -14,16 +14,27 @@ from .exceptions import MissingSpecFEMError
 class Settings(BaseSettings):
     """Global settings for specster."""
 
-    spec_bin_path: Path = Field(
+    spec_bin_path: Optional[Path] = Field(
         env="SPECFEM_BIN_PATH",
         default=None,
         description="Path to folder containing specfem binaries",
     )
-    spec_path: Path = Field(
+    spec_path: Optional[Path] = Field(
         env="SPECFEM_PATH",
         default=None,
         description="Path to folder containing specfem source",
     )
+
+    @root_validator()
+    def validate_spec_bin(cls, values):
+        """Validate the spectral bins"""
+        spec_bin_path = values.get("spec_bin_path")
+        if not spec_bin_path:
+            spec_path = values.get("spec_path")
+            if spec_path is None:
+                raise ValueError("No spec path specified!")
+            values["spec_bin_path"] = spec_path / "bin"
+        return values
 
     mode: Literal["2D", "3d"] = "2D"
 
