@@ -5,8 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from specster.utils.models import BaseControl
-
+from ..utils.control import BaseControl
 from .io import SpecParameters2D
 
 
@@ -17,6 +16,20 @@ class Control2d(BaseControl):
 
     _spec_parameters = SpecParameters2D
     _template_path = Path(__file__).parent / "templates"
+
+    def get_file_paths(self) -> dict[str, Path]:
+        """
+        Return a dict of important paths.
+
+        The names should match the template file names.
+        """
+        out = dict(
+            par_file=self._data_path / "Par_file",
+            stations=self._data_path / "STATIONS",
+            source=self._data_path / "SOURCE",
+            interfaces=self._data_path / "interfaces.dat",
+        )
+        return out
 
     def xmeshfem2d(self, print_=True):
         """Run the 2D mesher."""

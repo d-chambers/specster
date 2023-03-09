@@ -4,7 +4,9 @@ Misc small utilities.
 from functools import cache
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Template
+
+from specster.constants import special_dirs
 
 
 def get_directory_path(base_path: Path, directory_name: str) -> Path:
@@ -25,17 +27,28 @@ def find_file_startswith(path: Path, startswith="Par_file"):
     raise FileNotFoundError(msg)
 
 
-@cache
-def get_env(template_path):
-    """Get the template environment."""
-    template_path = Path(template_path)
-    env = Environment(loader=FileSystemLoader(template_path))
-    return env
+def find_data_path(path):
+    """Look for the data path."""
+    if path.name.startswith("DATA"):
+        return path
+    return path / "DATA"
+
+
+def find_base_path(path):
+    """find the base path"""
+    if path.name in special_dirs:
+        return path.parent
+    return path
 
 
 @cache
-def get_template(template_path, name):
-    """Get the template for rendering tables."""
-    env = get_env(template_path)
-    template = env.get_template(name)
-    return template
+def load_templates_from_directory(path: Path) -> dict:
+    """Load all templates in directory."""
+    assert path.exists() and path.is_dir()
+
+    out = {}
+    for path in path.glob("*"):
+        with path.open("r") as fi:
+            name = path.name.lower().rsplit(".", 1)[0]
+            out[name] = Template(fi.read())
+    return out

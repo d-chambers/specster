@@ -112,3 +112,7 @@ _MEANING_MAP = {
 
 # type of modules specfem supports
 _MODEL_TYPES = ("default", "ascii", "binary", "binary_boigt", "external", "gll")
+
+
+# Special directory names
+special_dirs = frozenset(["DATA", "OUTPUT_FILES", "SEM"])
