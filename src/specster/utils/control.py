@@ -34,7 +34,7 @@ class BaseControl:
     def __init__(self, base_path: Path, spec_bin_path: Optional[Path] = None):
         self.base_path = find_base_path(Path(base_path))
         self._spec_bin_path = Path(spec_bin_path or specster.settings.spec_bin_path)
-        self._par = self._spec_parameters.from_file(self._data_path)
+        self.par = self._spec_parameters.from_file(self._data_path)
         self._writen = True
 
     @property
@@ -105,7 +105,7 @@ class BaseControl:
         templates = load_templates_from_directory(self._template_path)
         paths = self.get_file_paths()
         assert set(paths).issubset(set(templates))
-        disp = self._par.disp
+        disp = self.par.disp
         for name, template in templates.items():
             path = paths[name]
             self._render_template(template, disp, path, overwrite)

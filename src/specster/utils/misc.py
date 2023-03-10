@@ -42,7 +42,7 @@ def find_base_path(path):
 
 
 @cache
-def load_templates_from_directory(path: Path) -> dict:
+def load_templates_text_from_directory(path: Path) -> dict:
     """Load all templates in directory."""
     assert path.exists() and path.is_dir()
 
@@ -50,5 +50,13 @@ def load_templates_from_directory(path: Path) -> dict:
     for path in path.glob("*"):
         with path.open("r") as fi:
             name = path.name.lower().rsplit(".", 1)[0]
-            out[name] = Template(fi.read())
+            out[name] = fi.read()
+    return out
+
+
+@cache
+def load_templates_from_directory(path: Path) -> dict:
+    """Load all templates in directory."""
+    text_dict = load_templates_text_from_directory(path)
+    out = {i: Template(v) for i, v in text_dict.items()}
     return out

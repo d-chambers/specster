@@ -330,7 +330,7 @@ class Sources(AbstractParameterModel):
         False,
         description="angleforce normal to surface",
     )
-    intialfield: bool = Field(
+    initialfield: bool = Field(
         False, description="use an existing initial wave field as source"
     )
     add_bielak_conditions_bottom: bool = Field(
@@ -458,10 +458,10 @@ class Receivers(AbstractParameterModel):
     seismotype: Literal["1", "2", "3", "4", "5", "6"] = Field(
         "1", description=dict_to_description("seismotype", _ENUM_MAP["seismotype"])
     )
-    nstep_between_output_seismos: int = Field(
+    ntstep_between_output_seismos: int = Field(
         10_000, description="Number of steps before saving seismograms"
     )
-    nstep_between_output_sample: int = Field(
+    ntstep_between_output_sample: int = Field(
         1, description="Downsampling factor for output seismograms"
     )
     use_trick_for_better_pressure: bool = Field(
@@ -472,10 +472,10 @@ class Receivers(AbstractParameterModel):
         True,
         description="save seismograms in ASCII",
     )
-    save_binary_seismogram_single: bool = Field(
+    save_binary_seismograms_single: bool = Field(
         True, description="save seismograms in single precision binary format"
     )
-    save_binary_seismogram_double: bool = Field(
+    save_binary_seismograms_double: bool = Field(
         False,
         description="save seismograms in double precision binary format",
     )
@@ -725,11 +725,13 @@ class SpecParameters2D(AbstractParameterModel):
     nstep: int = Field(1600, description="total number of time steps")
     dt: SpecFloat = Field(1.1e-3, description="time increment")
     time_stepping_scheme: int = Field(
+        1,
         description=dict_to_description(
             "time_stepping_scheme", _ENUM_MAP["time_stepping_scheme"]
-        )
+        ),
     )
-    axisum: bool = Field(False, description="type of calc (p-sv or SH/membrane waves")
+    p_sv: bool = Field(False, description="If P_SV should be run, otherwise SH")
+    axisym: bool = Field(False, description="type of calc (p-sv or SH/membrane waves")
     # ---- Mesh section
     mesh: Mesh
     # --- Attenuation section
