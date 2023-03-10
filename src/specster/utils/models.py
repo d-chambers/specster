@@ -2,6 +2,7 @@
 Module for models.
 """
 from functools import cached_property
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -36,9 +37,11 @@ class SpecsterModel(BaseModel):
 
         return Displayer(self)
 
-    def _write_data(self, key: str):
+    def write_data(self, key: Optional[str] = None):
         """Write the data contained in key to a string."""
-
+        if key is None:
+            msg = f"{self.__class__.__name__} requires a specified field"
+            raise ValueError(msg)
         value = getattr(self, key)
         # handle special types that need formatting
         field = self.__fields__.get(key, None)
@@ -46,12 +49,9 @@ class SpecsterModel(BaseModel):
         if field and field.type_ in formatter_dict:
             value = formatter_dict[field.type_](value)
         # handles recursive case
-        if hasattr(value, "_write_data"):
-            out = value._write_data(key)
-        else:
-            padded_key = key.ljust(self._key_space, " ")
-            str_value = str(value).ljust(self._value_space, " ")
-            out = padded_key + self._key_val_deliminator + str_value
+        padded_key = key.ljust(self._key_space, " ")
+        str_value = str(value).ljust(self._value_space, " ")
+        out = padded_key + self._key_val_deliminator + str_value
         return out
 
     @cached_property

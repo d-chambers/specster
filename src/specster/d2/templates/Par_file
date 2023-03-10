@@ -178,8 +178,8 @@
 {{ dis.receivers.receiver_sets.anglerec }}# angle to rotate components at receivers
 {{ dis.receivers.receiver_sets.rec_normal_to_surface }}# base anglerec normal to surface (external mesh and curve file needed)
 
-{% for i, receiver_set in enumerate(dis.receivers.receiver_sets.receiver_sets) %}
-    # receiver set {{ i }} (repeat these 6 lines and adjust nreceiversets accordingly)
+{% for receiver_set in dis.receivers.receiver_sets.receiver_sets %}
+    # receiver set {{ loop.index }} (repeat these 6 lines and adjust nreceiversets accordingly)
     {{ receiver_set.nrec }}# number of receivers
     {{ receiver_set.xdeb }}# first receiver x in meters
     {{ receiver_set.zdeb }}# first receiver z in meters
@@ -263,14 +263,15 @@
 # external tomography file
 {{ dis.material_models.TOMOGRAPHY_FILE }}
 
-# use an external mesh created by an external meshing tool or use the internal mesher
-{{ dis.material_models.read_external_mesh }}
 
 #-----------------------------------------------------------
 #
 # PARAMETERS FOR EXTERNAL MESHING
 #
 #-----------------------------------------------------------
+
+# use an external mesh created by an external meshing tool or use the internal mesher
+{{ dis.external_meshing.read_external_mesh }}
 
 # data concerning mesh, when generated using third-party app (more info in README)
 # (see also absorbing_conditions above)
@@ -305,9 +306,14 @@
 {{ dis.internal_meshing.absorbleft }}
 
 # define the different regions of the model in the (nx,nz) spectral-element mesh
-{{ dis.internal_meshing.nbregions }} # then set below the different regions and model number for each region
+{{ dis.internal_meshing.regions.nbregions }} # then set below the different regions and model number for each region
 
 # format of each line: nxmin nxmax nzmin nzmax material_number
+{% for region in dis.internal_meshing.regions.regions %}
+    {{ region.write_data() }} {{ loop.index }}
+{% endfor %}
+
+
 {{ dis.internal_meshing.regions }}
 
 #-----------------------------------------------------------
@@ -343,38 +349,38 @@
 
 # every how many time steps we draw JPEG or PostScript pictures of the simulation
 # and/or we dump results of the simulation as ASCII or binary files (costly, do not use a very small value)
-{{ dis.visualization.NTSTEP_BETWEEN_OUTPUT_IMAGES }}
+{{ dis.visualizations.NTSTEP_BETWEEN_OUTPUT_IMAGES }}
 
 # minimum amplitude kept in % for the JPEG and PostScript snapshots; amplitudes below that are muted
-{{ dis.cutsnaps }}
+{{ dis.visualizations.cutsnaps }}
 
 #### for JPEG color images ####
-{{ dis.visualization.output_color_image }}# output JPEG color image of the results every NTSTEP_BETWEEN_OUTPUT_IMAGES time steps or not
-{{ dis.visualization.imagetype_JPEG }}# display 1=displ_Ux 2=displ_Uz 3=displ_norm 4=veloc_Vx 5=veloc_Vz 6=veloc_norm 7=accel_Ax 8=accel_Az 9=accel_norm 10=pressure
-{{ dis.visualization.factor_subsample_image }}# (double precision) factor to subsample or oversample (if set to e.g. 0.5) color images output by the code (useful for very large models, or to get nicer looking denser pictures)
-{{ dis.visualization.USE_CONSTANT_MAX_AMPLITUDE }}# by default the code normalizes each image independently to its maximum; use this option to use the global maximum below instead
-{{ dis.visualization.CONSTANT_MAX_AMPLITUDE_TO_USE }}# constant maximum amplitude to use for all color images if the above USE_CONSTANT_MAX_AMPLITUDE option is true
-{{ dis.visualization.POWER_DISPLAY_COLOR }}# non linear display to enhance small amplitudes in JPEG color images
-{{ dis.visualization.DRAW_SOURCES_AND_RECEIVERS }}# display sources as orange crosses and receivers as green squares in JPEG images or not
-{{ dis.visualization.DRAW_WATER_IN_BLUE  }}# display acoustic layers as constant blue in JPEG images, because they likely correspond to water in the case of ocean acoustics or in the case of offshore oil industry experiments (if off, display them as greyscale, as for elastic or poroelastic elements, for instance for acoustic-only oil industry models of solid media)
-{{ dis.visualization.USE_SNAPSHOT_NUMBER_IN_FILENAME }}# use snapshot number in the file name of JPEG color snapshots instead of the time step (for instance to create movies in an easier way later)
+{{ dis.visualizations.jpeg.output_color_image }}# output JPEG color image of the results every NTSTEP_BETWEEN_OUTPUT_IMAGES time steps or not
+{{ dis.visualizations.jpeg.imagetype_JPEG }}# display 1=displ_Ux 2=displ_Uz 3=displ_norm 4=veloc_Vx 5=veloc_Vz 6=veloc_norm 7=accel_Ax 8=accel_Az 9=accel_norm 10=pressure
+{{ dis.visualizations.jpeg.factor_subsample_image }}# (double precision) factor to subsample or oversample (if set to e.g. 0.5) color images output by the code (useful for very large models, or to get nicer looking denser pictures)
+{{ dis.visualizations.jpeg.USE_CONSTANT_MAX_AMPLITUDE }}# by default the code normalizes each image independently to its maximum; use this option to use the global maximum below instead
+{{ dis.visualizations.jpeg.CONSTANT_MAX_AMPLITUDE_TO_USE }}# constant maximum amplitude to use for all color images if the above USE_CONSTANT_MAX_AMPLITUDE option is true
+{{ dis.visualizations.jpeg.POWER_DISPLAY_COLOR }}# non linear display to enhance small amplitudes in JPEG color images
+{{ dis.visualizations.jpeg.DRAW_SOURCES_AND_RECEIVERS }}# display sources as orange crosses and receivers as green squares in JPEG images or not
+{{ dis.visualizations.jpeg.DRAW_WATER_IN_BLUE  }}# display acoustic layers as constant blue in JPEG images, because they likely correspond to water in the case of ocean acoustics or in the case of offshore oil industry experiments (if off, display them as greyscale, as for elastic or poroelastic elements, for instance for acoustic-only oil industry models of solid media)
+{{ dis.visualizations.jpeg.USE_SNAPSHOT_NUMBER_IN_FILENAME }}# use snapshot number in the file name of JPEG color snapshots instead of the time step (for instance to create movies in an easier way later)
 
 #### for PostScript snapshots ####
-{{ dis.visualization.output_postscript_snapshot }}# output Postscript snapshot of the results every NTSTEP_BETWEEN_OUTPUT_IMAGES time steps or not
-{{ dis.visualization.imagetype_postscript }}# display 1=displ vector 2=veloc vector 3=accel vector; small arrows are displayed for the vectors
-{{ dis.visualization.meshvect }}# display mesh on PostScript plots or not
-{{ dis.visualization.modelvect }}# display velocity model on PostScript plots or not
-{{ dis.visualization.boundvect }}# display boundary conditions on PostScript plots or not
-{{ dis.visualization.interpol }}# interpolation of the PostScript display on a regular grid inside each spectral element, or use the non-evenly spaced GLL points
-{{ dis.visualization.pointsdisp }}# number of points in each direction for interpolation of PostScript snapshots (set to 1 for lower-left corner only)
-{{ dis.visualization.subsamp_postscript }}# subsampling of background velocity model in PostScript snapshots
-{{ dis.visualization.sizemax_arrows }}# maximum size of arrows on PostScript plots in centimeters
-{{ dis.visualization.US_LETTER }}# use US letter or European A4 paper for PostScript plots
+{{ dis.visualizations.postscript.output_postscript_snapshot }}# output Postscript snapshot of the results every NTSTEP_BETWEEN_OUTPUT_IMAGES time steps or not
+{{ dis.visualizations.postscript.imagetype_postscript }}# display 1=displ vector 2=veloc vector 3=accel vector; small arrows are displayed for the vectors
+{{ dis.visualizations.postscript.meshvect }}# display mesh on PostScript plots or not
+{{ dis.visualizations.postscript.modelvect }}# display velocity model on PostScript plots or not
+{{ dis.visualizations.postscript.boundvect }}# display boundary conditions on PostScript plots or not
+{{ dis.visualizations.postscript.interpol }}# interpolation of the PostScript display on a regular grid inside each spectral element, or use the non-evenly spaced GLL points
+{{ dis.visualizations.postscript.pointsdisp }}# number of points in each direction for interpolation of PostScript snapshots (set to 1 for lower-left corner only)
+{{ dis.visualizations.postscript.subsamp_postscript }}# subsampling of background velocity model in PostScript snapshots
+{{ dis.visualizations.postscript.sizemax_arrows }}# maximum size of arrows on PostScript plots in centimeters
+{{ dis.visualizations.postscript.US_LETTER }}# use US letter or European A4 paper for PostScript plots
 
 #### for wavefield dumps ####
-{{ dis.visualization.output_wavefield_dumps }}# output wave field to a text file (creates very big files)
-{{ dis.visualization.imagetype_wavefield_dumps }}# display 1=displ vector 2=veloc vector 3=accel vector 4=pressure
-{{ dis.visualization.use_binary_for_wavefield_dumps  }}# use ASCII or single-precision binary format for the wave field dumps
+{{ dis.visualizations.wavefield_dump.output_wavefield_dumps }}# output wave field to a text file (creates very big files)
+{{ dis.visualizations.wavefield_dump.imagetype_wavefield_dumps }}# display 1=displ vector 2=veloc vector 3=accel vector 4=pressure
+{{ dis.visualizations.wavefield_dump.use_binary_for_wavefield_dumps  }}# use ASCII or single-precision binary format for the wave field dumps
 
 #-----------------------------------------------------------
 

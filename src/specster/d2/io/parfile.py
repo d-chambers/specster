@@ -194,6 +194,11 @@ class Region2D(SpecsterModel):
     nzmax: int = Field(ge=1, description="ending z element")
     material_number: int = Field(ge=1, description="material applied to region")
 
+    def write_data(self, key: Optional[str] = None):
+        """Write data to file."""
+        out = f"{self.nxmin} {self.nxmax} {self.nzmin} {self.nzmax}"
+        return out
+
 
 class Regions(AbstractParameterModel):
     """Tracks regions in the model."""
@@ -498,7 +503,7 @@ class AdjointKernel(AbstractParameterModel):
     save_ascii_kernels: bool = Field(
         True, description="save sensitivity as ascii files. Save to binary otherwise"
     )
-    ntsetp_between_compute_kernels: int = Field(
+    ntstep_between_compute_kernels: int = Field(
         1, description="Only compute the adjoint every n steps"
     )
     approximate_hess_kl: bool = Field(
@@ -528,7 +533,7 @@ class BoundaryConditions(AbstractParameterModel):
     pml_parameter_adjustment: bool = Field(
         False, description="adjust PML to better damp single source"
     )
-    stacy_absorbing_conditions: bool = Field(
+    stacey_absorbing_conditions: bool = Field(
         False, description="activate stacey absorbing BCs"
     )
     add_periodic_conditions: bool = Field(
@@ -548,16 +553,16 @@ class ExternalMeshing(AbstractParameterModel):
     mesh_file: Optional[Path] = Field(
         "./DATA/mesh_file", description="Path to mesh file"
     )
-    node_coords_file: Optional[Path] = Field(
+    nodes_coords_file: Optional[Path] = Field(
         "./DATA/nodes_coords_dile", description="Path to mesh coordinates"
     )
-    material_file: Optional[Path] = Field(
+    materials_file: Optional[Path] = Field(
         "./DATA/material_file", description="Path to material file"
     )
     free_surface_file: Optional[Path] = Field(
         "./DATA/free_surface_file", description="Path to free surface file"
     )
-    axial_element_file: Optional[Path] = Field(
+    axial_elements_file: Optional[Path] = Field(
         "./DATA/axial_element_file", description="Path to mesh file"
     )
     absorbing_surface_file: Optional[Path] = Field(
@@ -569,7 +574,7 @@ class ExternalMeshing(AbstractParameterModel):
     absorbing_cpml_file: Optional[Path] = Field(
         "./DATA/absorbing_cpml_file", description="File with CPML element numbers"
     )
-    tangential_dtection_curve_file: Optional[Path] = Field(
+    tangential_detection_curve_file: Optional[Path] = Field(
         "./DATA/courbe_eros_nodes", description="Contains curve delineating model"
     )
 
@@ -593,7 +598,7 @@ class InternalMeshing(AbstractParameterModel):
 class Display(AbstractParameterModel):
     """Controls the display parameters."""
 
-    ntsetp_between_output_info: int = Field(
+    ntstep_between_output_info: int = Field(
         100, description="Display info about the displacement this steps"
     )
     output_grid_gnuplot: bool = Field(False, description="generate gnuplot file")
@@ -617,7 +622,7 @@ class JPEGDisplay(AbstractParameterModel):
         1,
         description=dict_to_description("imagetype_jpeg", _ENUM_MAP["imagetype_jpeg"]),
     )
-    factor_subsample_images: SpecFloat = Field(
+    factor_subsample_image: SpecFloat = Field(
         1.0, description="factor to subsample or oversample (<1)"
     )
     use_constant_max_amplitude: bool = Field(
@@ -687,16 +692,16 @@ class WaveDumpDisplay(AbstractParameterModel):
 class Visualizations(AbstractParameterModel):
     """Controls Other visualization parameters."""
 
-    ntsetp_between_output_images: int = Field(
+    ntstep_between_output_images: int = Field(
         100, description="How often (timestep) output is dumped for visualization"
     )
     cutsnaps: SpecFloat = Field(
         1.0, description="minimum amplitude kept in % for JPEG/PostScript"
     )
     # --- jpeg parameters
-    jpeg_display: JPEGDisplay
+    jpeg: JPEGDisplay
     # --- postscript parameters
-    postscript_display: PostScriptDisplay
+    postscript: PostScriptDisplay
     # --- wavedump parameters
     wavefield_dump: WaveDumpDisplay
 
@@ -755,6 +760,12 @@ class SpecParameters2D(AbstractParameterModel):
     # --- Visualization parameters (no idea why this is different from display)
     visualizations: Visualizations
     # Values at end of par file, no subsection
+
+    broadcast_same_mesh_and_model: bool = Field(
+        True,
+        description="see manual",
+    )
+
     number_of_simultaneous_runs: int = Field(
         1, description="complicated parameter, see specfem docs for details"
     )
@@ -765,17 +776,6 @@ class SpecParameters2D(AbstractParameterModel):
         """Parameter data from file."""
         data = parse_parfile(path)
         return cls.init_from_dict(data)
-
-    def write_data(self, data_path):
-        """
-        Write out the parameter, station, and source files.
-
-        Parameters
-        ----------
-        data_path
-            A path to the new data directory. It will be created if it
-            doesn't exist.
-        """
 
 
 # keys that require weird parsing rules. The key triggers

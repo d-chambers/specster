@@ -16,7 +16,7 @@ TEST_PATH = Path(__file__).absolute().parent
 
 TEST_DATA_PATH = TEST_PATH / "test_data"
 
-TEST_PATH_2D = Path(__file__).absolute().parent
+TEST_PATH_2D = Path(__file__).absolute().parent / "test_2D"
 
 TEST_DATA_2D_PATH = TEST_PATH_2D / "test_data"
 

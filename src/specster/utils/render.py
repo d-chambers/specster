@@ -3,7 +3,7 @@ A module for rendering specdata into text.
 """
 from __future__ import annotations
 
-from typing import Union
+from typing import Sequence, Union
 
 import specster
 
@@ -32,7 +32,9 @@ class Displayer:
         value = getattr(self._model, key)
         if hasattr(value, "disp"):
             return value.disp
-        out = self._model._write_data(key)
+        elif isinstance(value, Sequence):
+            return value
+        out = self._model.write_data(key)
         return out
 
 
