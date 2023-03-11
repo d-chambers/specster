@@ -64,6 +64,15 @@ class TestParseExamplePars:
         assert isinstance(run_parameters_2d, pf.SpecParameters2D)
 
 
+class TestModels:
+    """Tests for models read in."""
+
+    def test_nbmodels_matches_model_number(self, run_parameters_2d):
+        """Ensure number of models matches reported value."""
+        matmods = run_parameters_2d.material_models
+        assert matmods.nbmodels == len(matmods.models)
+
+
 class TestSources:
     """Tests for sources attached to parfiles."""
 

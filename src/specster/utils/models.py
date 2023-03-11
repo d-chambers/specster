@@ -37,17 +37,22 @@ class SpecsterModel(BaseModel):
 
         return Displayer(self)
 
-    def write_data(self, key: Optional[str] = None):
-        """Write the data contained in key to a string."""
-        if key is None:
-            msg = f"{self.__class__.__name__} requires a specified field"
-            raise ValueError(msg)
+    def get_formatted_str(self, key):
+        """Format key into string format."""
         value = getattr(self, key)
         # handle special types that need formatting
         field = self.__fields__.get(key, None)
         formatter_dict = self._parser_dict
         if field and field.type_ in formatter_dict:
             value = formatter_dict[field.type_](value)
+        return str(value)
+
+    def write_data(self, key: Optional[str] = None):
+        """Write the data contained in key to a string."""
+        if key is None:
+            msg = f"{self.__class__.__name__} requires a specified field"
+            raise ValueError(msg)
+        value = self.get_formatted_str(key)
         # handles recursive case
         padded_key = key.ljust(self._key_space, " ")
         str_value = str(value).ljust(self._value_space, " ")

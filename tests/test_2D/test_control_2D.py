@@ -2,6 +2,7 @@
 Tests for control class.
 """
 import specster as sp
+from specster.utils.misc import assert_models_equal
 
 
 class TestInit:
@@ -13,9 +14,9 @@ class TestInit:
 
     def test_write_equals(self, control_2d, tmp_path):
         """Ensure writing then reading evaluates to equal."""
-        # out = control_2d.write(path=tmp_path)
-        # new = sp.Control2d(tmp_path)
-        # assert out == new == control_2d
+        out = control_2d.write(path=tmp_path)
+        new = sp.Control2d(tmp_path)
+        assert_models_equal(out.par, new.par)
 
 
 class TestCopy:

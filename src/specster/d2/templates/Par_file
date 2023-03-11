@@ -313,11 +313,8 @@
 
 # format of each line: nxmin nxmax nzmin nzmax material_number
 {% for region in dis.internal_meshing.regions.regions %}
-    {{ region.write_data() }} {{ loop.index }}
+{{ region.write_data() }} {{ loop.index }}
 {% endfor %}
-
-
-{{ dis.internal_meshing.regions }}
 
 #-----------------------------------------------------------
 #

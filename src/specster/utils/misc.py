@@ -5,6 +5,7 @@ from functools import cache
 from pathlib import Path
 
 from jinja2 import Template
+from pydantic import BaseModel
 
 from specster.constants import special_dirs
 
@@ -60,3 +61,15 @@ def load_templates_from_directory(path: Path) -> dict:
     text_dict = load_templates_text_from_directory(path)
     out = {i: Template(v) for i, v in text_dict.items()}
     return out
+
+
+def assert_models_equal(model1, model2):
+    """Walk the models and assert they are equal (helps find unequal parts)"""
+    f1, f2 = set(model1.__fields__), set(model2.__fields__)
+    assert set(f1) == set(f2)
+    for key in f1:
+        val1, val2 = getattr(model1, key), getattr(model2, key)
+        if isinstance(val2, BaseModel) and isinstance(val1, BaseModel):
+            assert_models_equal(val1, val2)
+        else:
+            assert val1 == val2

@@ -52,6 +52,8 @@ class AbstractMaterialModelType(SpecsterModel):
 
     def write_data(self, key: Optional[str] = None):
         """Write the model data."""
+        param_list = [self.get_formatted_str(x) for x in self.__fields__]
+        return " ".join(param_list)
 
 
 class ElasticModel(AbstractMaterialModelType):
@@ -172,11 +174,10 @@ class MaterialModels(AbstractParameterModel):
             "nbmodels": int(value),
             "models": [],
         }
-        models = []
         for _ in range(int(value)):
             line = next(iterator)
             model_type = model_type_key[line.split()[1]]
-            models.append(model_type.read_line(line))
+            out["models"].append(model_type.read_line(line))
         # now read tomography (TODO: Is this the right place?)
         expected = {"tomography_file"}
         for _ in range(len(expected)):
