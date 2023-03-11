@@ -172,3 +172,15 @@ class BaseControl:
     def get_waveforms(self) -> obspy.Stream:
         """Read all waveforms in the output."""
         return read_ascii_stream(self.get_output_path())
+
+    def __str__(self):
+        msg = f"{self.__class__.__name__} with basepath {self.base_path}"
+        return msg
+
+    __repr__ = __str__
+
+    def __eq__(self, other):
+        """Tests for equality"""
+        if not isinstance(other, BaseControl):
+            return False
+        return self.par == other.par

@@ -34,6 +34,8 @@ class TestDisp:
 
     def test_base_attribute(self, base_disp):
         """Ensure all base attributes work."""
+        title = base_disp.title
+        assert "title" in title
         p_sv = base_disp.p_sv
         assert "p_sv" in p_sv
         assert ".true." in p_sv

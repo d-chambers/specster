@@ -38,9 +38,3 @@ class Control2d(BaseControl):
     def xspecfem2d(self, print_=True):
         """Run 2D specfem."""
         return self._run_spec_command("xspecfem2D", print_=print_)
-
-    def __str__(self):
-        msg = f"{self.__class__.__name__} with basepath {self.base_path}"
-        return msg
-
-    __repr__ = __str__

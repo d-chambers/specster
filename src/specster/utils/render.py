@@ -32,7 +32,7 @@ class Displayer:
         value = getattr(self._model, key)
         if hasattr(value, "disp"):
             return value.disp
-        elif isinstance(value, Sequence):
+        elif isinstance(value, Sequence) and not isinstance(value, str):
             return value
         out = self._model.write_data(key)
         return out

@@ -34,20 +34,24 @@ def read_stations(value, path, **kwargs):
 class AbstractMaterialModelType(SpecsterModel):
     """Abstract type for material models."""
 
-    _model_type = None
+    # model_type: str = "-10"
     _type_cls_map = {}  # {type: cls}
 
     def __init_subclass__(cls, **kwargs):
-        cls._type_cls_map[cls._model_type] = cls
+        default = cls.__fields__["model_type"].default
+        cls._type_cls_map[default] = cls
 
     @classmethod
     def read_line(cls, line):
         """Read lines to create class instance."""
         params = line.split()
-        assert int(params[1]) == int(cls._model_type), "Wrong model type!"
+        model_typ = cls.__fields__["model_type"].default
+        assert params[1] == model_typ, "Wrong model type!"
         # need to strip out model type, if we got here its already handled.
-        params_sub = [params[0]] + params[2:]
-        return super().read_line(params_sub)
+        return super().read_line(params)
+
+    def write_data(self, key: Optional[str] = None):
+        """Write the model data."""
 
 
 class ElasticModel(AbstractMaterialModelType):
@@ -63,8 +67,8 @@ class ElasticModel(AbstractMaterialModelType):
             (for QKappa and Qmu use 9999 to ignore them)
     """
 
-    _model_type = 1  # fixed type
     model_number: int
+    model_type: Literal["1"] = "1"  # fixed type
     rho: SpecFloat = Field(description="density")
     Vp: SpecFloat = Field(description="P velocity")
     Vs: SpecFloat = Field(description="S velocity")
@@ -92,8 +96,8 @@ class AnisotropicModel(AbstractMaterialModelType):
         model_number 2 rho c11 c13 c15 c33 c35 c55 c12 c23 c25 c22 QKappa Qmu
     """
 
-    _model_type = 2  # fixed type
     model_number: int
+    model_type: Literal["2"] = "2"  # fixed type
     rho: SpecFloat = Field(description="density")
     c11: SpecFloat
     c13: SpecFloat
@@ -112,8 +116,8 @@ class AnisotropicModel(AbstractMaterialModelType):
 class PoroelasticModel(AbstractMaterialModelType):
     """Model describing poroelastic material"""
 
-    _model_type = 3  # fixed type
     model_number: int
+    model_type: Literal["3"] = "3"  # fixed type
     rhos: SpecFloat
     rhof: SpecFloat
     phi: SpecFloat
@@ -132,8 +136,8 @@ class PoroelasticModel(AbstractMaterialModelType):
 class TomoModel(AbstractMaterialModelType):
     """Tomography model?"""
 
-    _model_type = -1  # fixed type
     model_number: int
+    model_type: Literal["-1"] = "-1"  # fixed type
     void1_: str = "0"
     void2_: str = "0"
     void3_: str = "0"
@@ -171,7 +175,7 @@ class MaterialModels(AbstractParameterModel):
         models = []
         for _ in range(int(value)):
             line = next(iterator)
-            model_type = model_type_key[int(line.split()[1])]
+            model_type = model_type_key[line.split()[1]]
             models.append(model_type.read_line(line))
         # now read tomography (TODO: Is this the right place?)
         expected = {"tomography_file"}
@@ -419,12 +423,14 @@ class ReceiverSet(SpecsterModel):
         True,
         description="fix receivers at the surface",
     )
+    write_data = SpecsterModel.write_data
+    disp = SpecsterModel.disp
 
 
 class ReceiverSets(AbstractParameterModel):
     """Class containing multiple receiver sets."""
 
-    nreceiversets: int = Field(2, description="Number of receiver sets")
+    nreceiversets: int = Field(description="Number of receiver sets")
     anglerec: SpecFloat = Field(
         0.0, description="angle to rotate components at receivers"
     )
@@ -439,19 +445,19 @@ class ReceiverSets(AbstractParameterModel):
         """Read the receiver sets from the iterator."""
         receiver_set_count = int(value)
         out = dict(
-            rec_count=receiver_set_count,
+            nreceiversets=receiver_set_count,
             anglerec=extract_parline_key_value(next(iterator))[1],
             rec_normal_to_surface=extract_parline_key_value(next(iterator))[1],
             receiver_sets=[],
         )
-        # Skip populating receivers if we don't use them
+        # # Skip populating receivers if we don't use them
         if state.get("use_existing_stations"):
             return cls(**out)
         for _ in range(receiver_set_count):
             rec_dict = {}
             for _ in range(6):  # each receiver set has six lines
-                key, value = extract_parline_key_value(next(iterator))
-                rec_dict[key] = value
+                key, val = extract_parline_key_value(next(iterator))
+                rec_dict[key] = val
             out["receiver_sets"].append(ReceiverSet(**rec_dict))
         assert len(out["receiver_sets"]) == receiver_set_count
         return cls(**out)

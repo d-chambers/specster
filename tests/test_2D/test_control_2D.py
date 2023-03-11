@@ -4,12 +4,18 @@ Tests for control class.
 import specster as sp
 
 
-class TestReadFromFile:
-    """Tests for creating control from files."""
+class TestInit:
+    """Tests for creating controls"""
 
     def test_from_data_directory(self, control_2d):
         """Tests for getting data from data directory."""
         assert isinstance(control_2d, sp.Control2d)
+
+    def test_write_equals(self, control_2d, tmp_path):
+        """Ensure writing then reading evaluates to equal."""
+        # out = control_2d.write(path=tmp_path)
+        # new = sp.Control2d(tmp_path)
+        # assert out == new == control_2d
 
 
 class TestCopy:

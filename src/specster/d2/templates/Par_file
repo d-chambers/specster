@@ -179,13 +179,13 @@
 {{ dis.receivers.receiver_sets.rec_normal_to_surface }}# base anglerec normal to surface (external mesh and curve file needed)
 
 {% for receiver_set in dis.receivers.receiver_sets.receiver_sets %}
-    # receiver set {{ loop.index }} (repeat these 6 lines and adjust nreceiversets accordingly)
-    {{ receiver_set.nrec }}# number of receivers
-    {{ receiver_set.xdeb }}# first receiver x in meters
-    {{ receiver_set.zdeb }}# first receiver z in meters
-    {{ receiver_set.xfin }}# last receiver x in meters (ignored if only one receiver)
-    {{ receiver_set.zfin }}# last receiver z in meters (ignored if only one receiver)
-    {{ receiver_set.record_at_surface_same_vertical }}# receivers inside the medium or at the surface (z values are ignored if this is set to true, they are replaced with the topography height)
+# receiver set {{ loop.index }} (repeat these 6 lines and adjust nreceiversets accordingly)
+{{ receiver_set.disp.nrec }}# number of receivers
+{{ receiver_set.disp.xdeb }}# first receiver x in meters
+{{ receiver_set.disp.zdeb }}# first receiver z in meters
+{{ receiver_set.disp.xfin }}# last receiver x in meters (ignored if only one receiver)
+{{ receiver_set.disp.zfin }}# last receiver z in meters (ignored if only one receiver)
+{{ receiver_set.disp.record_at_surface_same_vertical }}# receivers inside the medium or at the surface (z values are ignored if this is set to true, they are replaced with the topography height)
 {% endfor %}
 
 #-----------------------------------------------------------
@@ -258,7 +258,10 @@
 #       Please also note that Qmu is always equal to Qs, but Qkappa is in general not equal to Qp.
 #       To convert one to the other see doc/Qkappa_Qmu_versus_Qp_Qs_relationship_in_2D_plane_strain.pdf and
 #       utils/attenuation/conversion_from_Qkappa_Qmu_to_Qp_Qs_from_Dahlen_Tromp_959_960.f90.
-{{ dis.material_models.models }}
+
+{% for model in dis.material_models.models %}
+{{ model.write_data() }}
+{% endfor %}
 
 # external tomography file
 {{ dis.material_models.TOMOGRAPHY_FILE }}
