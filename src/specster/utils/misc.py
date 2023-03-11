@@ -4,6 +4,7 @@ Misc small utilities.
 from functools import cache
 from pathlib import Path
 
+import numpy as np
 from jinja2 import Template
 from pydantic import BaseModel
 
@@ -63,13 +64,28 @@ def load_templates_from_directory(path: Path) -> dict:
     return out
 
 
+def assert_floats_nearly_equal(val1, val2, tolerance=0.0001):
+    """Ensure floats are nearly equal"""
+    if isinstance(val1, float) and isinstance(val2, float):
+        out = (val2 - val1) / (np.mean([val2, val1]))
+        assert np.abs(out) < tolerance
+    else:
+        assert val1 == val2
+
+
 def assert_models_equal(model1, model2):
     """Walk the models and assert they are equal (helps find unequal parts)"""
-    f1, f2 = set(model1.__fields__), set(model2.__fields__)
-    assert set(f1) == set(f2)
-    for key in f1:
-        val1, val2 = getattr(model1, key), getattr(model2, key)
-        if isinstance(val2, BaseModel) and isinstance(val1, BaseModel):
-            assert_models_equal(val1, val2)
-        else:
-            assert val1 == val2
+    if hasattr(model1, "__fields__") and hasattr(model2, "__fields__"):
+        f1, f2 = set(model1.__fields__), set(model2.__fields__)
+        assert set(f1) == set(f2)
+        for key in f1:
+            val1, val2 = getattr(model1, key), getattr(model2, key)
+            if isinstance(val2, BaseModel) and isinstance(val1, BaseModel):
+                assert_models_equal(val1, val2)
+            elif isinstance(val1, (list, tuple)) and isinstance(val2, (list, tuple)):
+                for sub_val1, sub_val2 in zip(val1, val2):
+                    assert_models_equal(sub_val1, sub_val2)
+            else:
+                assert_floats_nearly_equal(model1, model2)
+    else:
+        assert_floats_nearly_equal(model1, model2)
