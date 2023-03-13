@@ -201,7 +201,8 @@ class Region2D(SpecsterModel):
 
     def write_data(self, key: Optional[str] = None):
         """Write data to file."""
-        out = f"{self.nxmin} {self.nxmax} {self.nzmin} {self.nzmax}"
+        field_names = [f"{getattr(self, x):d}" for x in self.__fields__]
+        out = " ".join(field_names)
         return out
 
 

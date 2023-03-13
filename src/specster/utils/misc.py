@@ -66,11 +66,9 @@ def load_templates_from_directory(path: Path) -> dict:
 
 def assert_floats_nearly_equal(val1, val2, tolerance=0.0001):
     """Ensure floats are nearly equal"""
-    if isinstance(val1, float) and isinstance(val2, float):
+    if val1 != val2:
         out = (val2 - val1) / (np.mean([val2, val1]))
         assert np.abs(out) < tolerance
-    else:
-        assert val1 == val2
 
 
 def assert_models_equal(model1, model2):
@@ -78,14 +76,19 @@ def assert_models_equal(model1, model2):
     if hasattr(model1, "__fields__") and hasattr(model2, "__fields__"):
         f1, f2 = set(model1.__fields__), set(model2.__fields__)
         assert set(f1) == set(f2)
+        # iterate each key, recursively apply model equals
         for key in f1:
             val1, val2 = getattr(model1, key), getattr(model2, key)
-            if isinstance(val2, BaseModel) and isinstance(val1, BaseModel):
-                assert_models_equal(val1, val2)
-            elif isinstance(val1, (list, tuple)) and isinstance(val2, (list, tuple)):
+            if isinstance(val1, (list, tuple)) and isinstance(val2, (list, tuple)):
                 for sub_val1, sub_val2 in zip(val1, val2):
                     assert_models_equal(sub_val1, sub_val2)
             else:
-                assert_floats_nearly_equal(model1, model2)
-    else:
+                assert_models_equal(val1, val2)
+    # special handling for floats
+    elif isinstance(model1, float) and isinstance(model2, float):
         assert_floats_nearly_equal(model1, model2)
+    # simply recurse for other models
+    elif isinstance(model1, BaseModel) and isinstance(model2, BaseModel):
+        assert_models_equal(model1, model2)
+    else:  # anything else should be equal
+        assert model1 == model2
