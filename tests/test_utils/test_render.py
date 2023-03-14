@@ -32,12 +32,11 @@ def base_disp(control_2d_default):
 class TestDisp:
     """Tests for disp object."""
 
-    def test_base_attribute(self, base_disp):
+    def test_base_attribute(self, base_disp, control_2d_default):
         """Ensure all base attributes work."""
         title = base_disp.title
-        assert "title" in title
+        assert title == control_2d_default.par.title
         p_sv = base_disp.p_sv
-        assert "p_sv" in p_sv
         assert ".true." in p_sv
 
     def test_2d_parfile(self, base_disp, parfile_characters):

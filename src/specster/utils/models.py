@@ -10,10 +10,6 @@ from pydantic import BaseModel
 class SpecsterModel(BaseModel):
     """Abstract model in case we need to modify base behavior."""
 
-    _key_space = 31
-    _value_space = 15
-    _key_val_deliminator = " = "
-
     class Config:
         """Configuration for models."""
 
@@ -53,11 +49,7 @@ class SpecsterModel(BaseModel):
             msg = f"{self.__class__.__name__} requires a specified field"
             raise ValueError(msg)
         value = self.get_formatted_str(key)
-        # handles recursive case
-        padded_key = key.upper().ljust(self._key_space, " ")
-        str_value = str(value).ljust(self._value_space, " ")
-        out = padded_key + self._key_val_deliminator + str_value
-        return out
+        return str(value)
 
     @cached_property
     def _parser_dict(self):
