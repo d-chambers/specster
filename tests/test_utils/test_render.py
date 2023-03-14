@@ -8,19 +8,33 @@ import pytest
 from specster.utils.misc import load_templates_text_from_directory
 
 
-@pytest.fixture(scope="class")
-def parfile_characters(control_2d_default):
-    """Return a list of parameters requested in the par file."""
-    texts = load_templates_text_from_directory(control_2d_default._template_path)
-    full = texts["par_file"]
+def extract_requested_attrs(text):
+    """Extract the requested attributes."""
     regex = "\{\{(.*?)\}"
-    matches = list(re.finditer(regex, full, re.MULTILINE | re.DOTALL))
+    matches = list(re.finditer(regex, text, re.MULTILINE | re.DOTALL))
     out = []
     for match in matches:
         for group in match.groups():
             txt = group.strip()
+            # skipping jinga stuff
+            if "loop." in txt:
+                continue
             out.append(txt)
     return out
+
+
+@pytest.fixture(scope="class")
+def parfile_attrs(control_2d_default):
+    """Return a list of parameters requested in the par file."""
+    texts = load_templates_text_from_directory(control_2d_default._template_path)
+    return extract_requested_attrs(texts["par_file"])
+
+
+@pytest.fixture(scope="class")
+def source_attrs(control_2d_default):
+    """Return a list of parameters requested in the source file."""
+    texts = load_templates_text_from_directory(control_2d_default._template_path)
+    return extract_requested_attrs(texts["source"])
 
 
 @pytest.fixture(scope="class")
@@ -39,11 +53,19 @@ class TestDisp:
         p_sv = base_disp.p_sv
         assert ".true." in p_sv
 
-    def test_2d_parfile(self, base_disp, parfile_characters):
+    def test_2d_parfile(self, base_disp, parfile_attrs):
         """Iterate all requested params and resolve."""
-        for text in parfile_characters:
+        for text in parfile_attrs:
             if not text.startswith("dis"):
                 continue
             val = base_disp
             for attr in text.split(".")[1:]:
                 val = getattr(val, attr)
+
+    def test_2d_source_file(self, base_disp, source_attrs):
+        """Ensure all the source parameters can be requested."""
+        for source in base_disp.sources.sources:
+            for text in source_attrs:
+                val = source
+                for attr in text.split(".")[1:]:
+                    val = getattr(val, attr)

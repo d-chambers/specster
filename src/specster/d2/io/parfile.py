@@ -10,7 +10,7 @@ from pydantic import Field
 
 from specster.constants import _ENUM_MAP, _MEANING_MAP
 from specster.exceptions import UnhandledParFileLine
-from specster.utils.misc import find_file_startswith
+from specster.utils.misc import SizeOfDescriptor, find_file_startswith
 from specster.utils.models import AbstractParameterModel, SpecFloat, SpecsterModel
 from specster.utils.parse import extract_parline_key_value, iter_file_lines
 from specster.utils.render import dict_to_description
@@ -209,7 +209,7 @@ class Region2D(SpecsterModel):
 class Regions(AbstractParameterModel):
     """Tracks regions in the model."""
 
-    nbregions: int
+    nbregions: int = SizeOfDescriptor("regions")
     regions: List[Region2D]
 
     @classmethod
@@ -324,9 +324,9 @@ class Source(SpecsterModel):
         0.0, description="time shift when multisources used (one must be 0)"
     )
     anglesource: SpecFloat = Field(0.0, description="Plane have incident angle")
-    Mxx: SpecFloat = Field(1.0, description="Mxx component of moment tensor")
-    Mzz: SpecFloat = Field(1.0, description="Mzz component of moment tensor")
-    Mxz: SpecFloat = Field(0.0, description="Mxz component of moment tensor")
+    mxx: SpecFloat = Field(1.0, description="Mxx component of moment tensor")
+    mzz: SpecFloat = Field(1.0, description="Mzz component of moment tensor")
+    mxz: SpecFloat = Field(0.0, description="Mxz component of moment tensor")
     factor: SpecFloat = Field(1.000e10, description="amplification factor")
     vx: SpecFloat = Field(0.0, description="Horizontal source velocity (m/s)")
     vz: SpecFloat = Field(0.0, description="Vertical source velocity (m/s)")
@@ -673,7 +673,7 @@ class PostScriptDisplay(AbstractParameterModel):
     pointsdisp: int = Field(
         6, description="Number of points in each direction for interpolation."
     )
-    subsamp_postscript: bool = Field(
+    subsamp_postscript: int = Field(
         1, description="subsampling of velocity model for post script plots"
     )
     sizemax_arrows: SpecFloat = Field(1.0, description="Max size for arrows in cm")

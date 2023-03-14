@@ -14,6 +14,7 @@ import obspy
 import specster
 from specster.utils.callout import run_command
 from specster.utils.misc import (
+    SequenceDescriptor,
     find_base_path,
     find_data_path,
     get_control_default_path,
@@ -33,6 +34,12 @@ class BaseControl:
     _template_path = None
     _spec_parameters = SpecsterModel
     _control_type: Optional[str] = None
+
+    sources = SequenceDescriptor("par.sources.sources")
+    models = SequenceDescriptor("par.material_models.models")
+    stations = SequenceDescriptor("par.receivers.stations")
+    receiver_sets = SequenceDescriptor("par.receivers.receiver_sets")
+    regions = SequenceDescriptor("par.internal_meshing.regions.regions")
 
     def __init__(
         self, base_path: Optional[Path] = None, spec_bin_path: Optional[Path] = None

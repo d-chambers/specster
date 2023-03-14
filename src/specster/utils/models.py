@@ -111,6 +111,6 @@ class SpecFloat(float, SimpleValidator):
     @staticmethod
     def func(value):
         """Remove silly d, cast to float"""
-        if "d" in value:
+        if isinstance(value, str) and "d" in value:
             value = value.replace("d", "e")
         return float(value)

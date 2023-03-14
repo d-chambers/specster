@@ -1,6 +1,9 @@
 """
 Tests for control class.
 """
+
+import pytest
+
 import specster as sp
 from specster.utils.misc import assert_models_equal
 
@@ -33,11 +36,41 @@ class TestCopy:
         assert copy1.base_path != control_2d.base_path
 
 
-class TestRun:
-    """Tests for copying, writing, and running."""
+class TestModify:
+    """Various tests for modifying control structure."""
 
-    def test_write_and_run_default(self, tmp_path):
+    def test_modify_regions(self):
+        """Ensure modifying regions also updates nbregions."""
+        control = sp.Control2d()
+        region_count = control.par.internal_meshing.regions.nbregions
+        control.regions = control.regions[1:]
+        assert region_count + 1 == control.par.internal_meshing.regions.nbregions
+
+
+@pytest.mark.e2e
+class TestEnd2End:
+    """Various end-to-end tests."""
+
+    @pytest.fixture(scope="class")
+    def modified_control(self, tmp_path_factory):
+        """Create a control class, perform several modifications."""
+        tmp_path = tmp_path_factory.mktemp("end_to_end")
+        control = sp.Control2d().copy(tmp_path)
+        # first change model params
+        mods = control.models
+        mods[0].rho *= 1.01
+        mods[0].Vp *= 1.01
+        control.models = mods
+        # Then remove all but 1 stations
+        # sources = control.sources
+        # breakpoint()
+        return control
+
+    @pytest.mark.slow
+    def test_write_and_run_default(self, modified_control):
         """Test the default can be written and run."""
-        # control = sp.Control2d().copy(tmp_path)
-        # control.xspecfem2d()
-        # control.xspecfem2d()
+        modified_control.xmeshfem2d()
+        modified_control.xspecfem2d()
+
+    # @pytest.mark.slow
+    # def

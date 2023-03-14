@@ -1,9 +1,9 @@
 {% for source in dis.sources.sources  %}
 
 ## Source {{ loop.index }}
-source_surf                     = {{ source.disp.source_surf }}# source inside the medium, or source automatically moved exactly at the surface by the solver
-xs                              = {{ source.disp.xs }}# source location x in meters
-zs                              = {{ source.disp.zs }}# source location z in meters (zs is ignored if source_surf is set to true, it is replaced with the topography height)
+source_surf                     = {{ source.disp.source_surf }}  # source inside the medium, or source automatically moved exactly at the surface by the solver
+xs                              = {{ source.disp.xs }}  # source location x in meters
+zs                              = {{ source.disp.zs }}  # source location z in meters (zs is ignored if source_surf is set to true, it is replaced with the topography height)
 
 ## Source type parameters:
 #  1 = elastic force or acoustic pressure
@@ -42,10 +42,10 @@ time_function_type              = {{ source.disp.time_function_type }}
 # If time_function_type == 8, enter below the custom source file to read (two columns file with time and amplitude) :
 # (For the moment dt must be equal to the dt of the simulation. File name cannot exceed 150 characters)
 # IMPORTANT: do NOT put quote signs around the file name, just put the file name itself otherwise the run will stop
-name_of_source_file             = {{ source.disp.name_of_source_file }}# Only for option 8 : file containing the source wavelet
-burst_band_width                = {{ source.disp.burst_band_width }}# Only for option 9 : band width of the burst
-f0                              = {{ source.disp.f0 }}# dominant source frequency (Hz) if not Dirac or Heaviside
-tshift                          = {{ source.disp.tshift }}# time shift when multi sources (if one source, must be zero)
+name_of_source_file             = {{ source.disp.name_of_source_file }}  # Only for option 8 : file containing the source wavelet
+burst_band_width                = {{ source.disp.burst_band_width }}  # Only for option 9 : band width of the burst
+f0                              = {{ source.disp.f0 }}  # dominant source frequency (Hz) if not Dirac or Heaviside
+tshift                          = {{ source.disp.tshift }}  # time shift when multi sources (if one source, must be zero)
 
 ## Force source
 # angle of the source (for a force only); for a plane wave, this is the incidence angle; for moment tensor sources this is unused
@@ -53,15 +53,15 @@ anglesource                     = {{ source.disp.anglesource }}
 
 ## Moment tensor
 # The components of a moment tensor source must be given in N.m, not in dyne.cm as in the DATA/CMTSOLUTION source file of the 3D version of the code.
-Mxx                             = {{ source.disp.Mxx }}# Mxx component (for a moment tensor source only)
-Mzz                             = {{ source.disp.Mzz }}# Mzz component (for a moment tensor source only)
-Mxz                             = {{ source.disp.Mxz }}# Mxz component (for a moment tensor source only)
+Mxx                             = {{ source.disp.Mxx }}  # Mxx component (for a moment tensor source only)
+Mzz                             = {{ source.disp.Mzz }}  # Mzz component (for a moment tensor source only)
+Mxz                             = {{ source.disp.Mxz }}  # Mxz component (for a moment tensor source only)
 
 ## Amplification (factor to amplify source time function)
-factor                          = {{ source.disp.factor  }}# amplification factor
+factor                          = {{ source.disp.factor  }}  # amplification factor
 
 ## Moving source parameters
-vx                              = {{ source.disp.vx }}# Horizontal source velocity (m/s)
-vz                              = {{ source.disp.vz }}# Vertical source velocity (m/s)
+vx                              = {{ source.disp.vx }}  # Horizontal source velocity (m/s)
+vz                              = {{ source.disp.vz }}  # Vertical source velocity (m/s)
 
 {% endfor %}

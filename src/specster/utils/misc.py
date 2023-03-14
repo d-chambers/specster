@@ -1,6 +1,7 @@
 """
 Misc small utilities.
 """
+import copy
 from functools import cache
 from pathlib import Path
 from typing import Literal
@@ -103,3 +104,44 @@ def get_control_default_path(control: Literal["2D", "3D", None] = "2D") -> Path:
     else:
         msg = "other controls not yet supported"
         raise ValueError(msg)
+
+
+class SequenceDescriptor:
+    """A descriptor for returning/setting discriptors."""
+
+    def __init__(self, attribute: str):
+        self._attributes = attribute.split(".")
+
+    def __set_name__(self, owner, name):
+        self._name = name
+
+    def __get__(self, instance, owner):
+        out = instance
+        for attr in self._attributes:
+            out = getattr(out, attr)
+        return copy.deepcopy(out)
+
+    def __set__(self, instance, value):
+        base_attr = instance
+        for attr in self._attributes[:-1]:
+            base_attr = getattr(base_attr, attr)
+        setattr(base_attr, self._attributes[-1], value)
+
+
+class SizeOfDescriptor:
+    """
+    A descriptor which returns the size of a sequence attached to instance.
+    """
+
+    def __init__(self, sequence_attr):
+        self._sequence_attr = sequence_attr
+
+    def __set_name__(self, owner, name):
+        self._name = name
+
+    def __get__(self, instance, owner):
+        seq = getattr(instance, self._sequence_attr)
+        return len(seq)
+
+    def __set__(self, instance, value):
+        pass  # allow passing so values can be parsed.
