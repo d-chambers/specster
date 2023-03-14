@@ -54,7 +54,7 @@ class SpecsterModel(BaseModel):
             raise ValueError(msg)
         value = self.get_formatted_str(key)
         # handles recursive case
-        padded_key = key.ljust(self._key_space, " ")
+        padded_key = key.upper().ljust(self._key_space, " ")
         str_value = str(value).ljust(self._value_space, " ")
         out = padded_key + self._key_val_deliminator + str_value
         return out

@@ -289,7 +289,7 @@ class Attenuation(AbstractParameterModel):
     undo_attenuation_and_or_pml: bool = Field(
         False, description="Undo attenuation for sensitivity kernel calc."
     )
-    nt_dump_attenuation: SpecFloat = Field(
+    nt_dump_attenuation: int = Field(
         500, description="how often to dump restart files in sensitivity calc."
     )
     no_backward_reconstruction: bool = Field(

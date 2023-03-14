@@ -13,3 +13,7 @@ class MissingSpecFEMError(SpecsterError, FileNotFoundError):
 
 class UnhandledParFileLine(SpecsterError, ValueError):
     """Raised when a non-comment line isn't parsable."""
+
+
+class SpecFEMError(SpecsterError, ValueError):
+    """Raised when calling specfem gives an error."""

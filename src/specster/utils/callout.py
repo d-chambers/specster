@@ -21,7 +21,7 @@ def command_run_and_stream(command, cwd=None):
         yield "stderr", line
     # This ensures the process has completed, AND sets the 'returncode' attr
     while p.poll() is None:
-        sleep(0.1)  # Don't waste CPU-cycles
+        sleep(0.5)  # Don't waste CPU-cycles
     if p.poll() is not None:
         yield "return_code", p.poll()
         return

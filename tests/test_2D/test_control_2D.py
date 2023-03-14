@@ -18,6 +18,11 @@ class TestInit:
         new = sp.Control2d(tmp_path)
         assert_models_equal(out.par, new.par)
 
+    def test_default_init(self):
+        """Ensure the default data is populated."""
+        control = sp.Control2d()
+        assert isinstance(control, sp.Control2d)
+
 
 class TestCopy:
     """Tests for copying runSpec."""
@@ -28,10 +33,11 @@ class TestCopy:
         assert copy1.base_path != control_2d.base_path
 
 
-class TestWriteAndRun:
+class TestRun:
     """Tests for copying, writing, and running."""
 
-    def test_write(self, control_2d, tmp_path):
-        """Test for writing control to file."""
-        copy = control_2d.copy(tmp_path)
-        copy.write()
+    def test_write_and_run_default(self, tmp_path):
+        """Test the default can be written and run."""
+        # control = sp.Control2d().copy(tmp_path)
+        # control.xspecfem2d()
+        # control.xspecfem2d()

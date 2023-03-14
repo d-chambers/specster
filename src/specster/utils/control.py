@@ -16,9 +16,11 @@ from specster.utils.callout import run_command
 from specster.utils.misc import (
     find_base_path,
     find_data_path,
+    get_control_default_path,
     load_templates_from_directory,
 )
 from specster.utils.models import SpecsterModel
+from specster.utils.printer import console, print_output_run
 from specster.utils.waveforms import read_ascii_stream
 
 
@@ -30,8 +32,13 @@ class BaseControl:
     _writen: bool = False
     _template_path = None
     _spec_parameters = SpecsterModel
+    _control_type: Optional[str] = None
 
-    def __init__(self, base_path: Path, spec_bin_path: Optional[Path] = None):
+    def __init__(
+        self, base_path: Optional[Path] = None, spec_bin_path: Optional[Path] = None
+    ):
+        if base_path is None:
+            base_path = get_control_default_path(self._control_type)
         self.base_path = find_base_path(Path(base_path))
         self._spec_bin_path = Path(spec_bin_path or specster.settings.spec_bin_path)
         self.par = self._spec_parameters.from_file(self._data_path)
@@ -159,14 +166,24 @@ class BaseControl:
 
     def _run_spec_command(self, command: str, print_=True):
         """Run a specfem command."""
+        console.rule(
+            f"[bold red]Running specfem command: {command} on {self.base_path}"
+        )
+        if not self._writen:
+            self.write()
+            self._writen = True
         self.get_output_path()
         bin = self._spec_bin_path / command
         assert bin.exists()
         out = run_command(str(bin), cwd=self.base_path, print_=print_)
+        out["command"], out["path"] = command, self.base_path
         # write ouput
         if print_:
             self._write_output_file(out["stdout"], f"{command}_stdout.txt")
             self._write_output_file(out["stderr"], f"{command}_stderr.txt")
+        # raise exception if command was not successful
+        print_output_run(out)
+
         return out
 
     def get_waveforms(self) -> obspy.Stream:

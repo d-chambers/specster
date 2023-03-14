@@ -49,6 +49,7 @@ dependencies = [
     "obsplus",
     "matplotlib",
     "jinja2",
+    "rich",
 ]
 
 [project.optional-dependencies]

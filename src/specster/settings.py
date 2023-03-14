@@ -25,6 +25,10 @@ class Settings(BaseSettings):
         description="Path to folder containing specfem source",
     )
 
+    package_path: Optional[Path] = Field(
+        default_factory=lambda: Path(__file__).parent.absolute(),
+    )
+
     @root_validator()
     def validate_spec_bin(cls, values):
         """Validate the spectral bins"""

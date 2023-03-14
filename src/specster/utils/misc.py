@@ -3,11 +3,13 @@ Misc small utilities.
 """
 from functools import cache
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 from jinja2 import Template
 from pydantic import BaseModel
 
+import specster
 from specster.constants import special_dirs
 
 
@@ -92,3 +94,12 @@ def assert_models_equal(model1, model2):
         assert_models_equal(model1, model2)
     else:  # anything else should be equal
         assert model1 == model2
+
+
+def get_control_default_path(control: Literal["2D", "3D", None] = "2D") -> Path:
+    """Get the path to the default control files."""
+    if control == "2D":
+        return specster.settings.package_path / "d2" / "base_case_2d"
+    else:
+        msg = "other controls not yet supported"
+        raise ValueError(msg)

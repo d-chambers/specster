@@ -16,6 +16,7 @@ class Control2d(BaseControl):
 
     _spec_parameters = SpecParameters2D
     _template_path = Path(__file__).parent / "templates"
+    _control_type = "2D"
 
     def get_file_paths(self) -> dict[str, Path]:
         """
