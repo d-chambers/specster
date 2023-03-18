@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from specster.utils.misc import load_templates_text_from_directory
+from specster.core.misc import load_templates_text_from_directory
 
 
 def extract_requested_attrs(text):

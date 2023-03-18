@@ -4,6 +4,7 @@ Tests for reading par files.
 
 import pytest
 
+import specster.core.stations
 import specster.d2.io.parfile as pf
 
 
@@ -93,7 +94,7 @@ class TestStations:
             pytest.skip("No external stations on this file.")
         assert len(run_parameters_2d.receivers.stations)
         for station in run_parameters_2d.receivers.stations:
-            assert isinstance(station, pf.Station)
+            assert isinstance(station, specster.core.stations.Station2D)
 
 
 class TestDisp:

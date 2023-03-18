@@ -1,1 +1,3 @@
-{{ dis.stations }}
+{% for station in dis.receivers.stations  -%}
+{{ station.write_model_data() }}
+{% endfor %}

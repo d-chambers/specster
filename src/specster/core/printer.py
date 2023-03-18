@@ -1,8 +1,11 @@
 """
 Module for printing things to the screen.
 """
+from contextlib import contextmanager
+
 from rich.console import Console
 
+import specster
 from specster.exceptions import SpecFEMError
 
 console = Console()
@@ -10,6 +13,19 @@ consolestderr = Console(stderr=True)
 
 stderr_style = "bold red"
 stdout_style = "bold blue"
+
+
+@contextmanager
+def program_render(console, title=""):
+    """Render the output of a program."""
+
+    if specster.settings.ci:  # do nothing on CI
+        yield
+    else:
+        with console.screen() as screen:
+            yield screen
+        console.print()
+        console.rule(f"[bold red]Finished command: {title}")
 
 
 def print_output_run(output_dict):

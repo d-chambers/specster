@@ -10,7 +10,7 @@ import pytest
 
 import specster
 import specster.d2.io.parfile as pf
-from specster.utils.misc import find_file_startswith
+from specster.core.misc import find_file_startswith
 
 TEST_PATH = Path(__file__).absolute().parent
 
@@ -111,10 +111,40 @@ def control_2d(data_dir_path):
     return spec
 
 
-@pytest.fixture(scope="session")
-def control_2d_default(default_data_path) -> specster.Control2d:
+@pytest.fixture(scope="class")
+def control_2d_default() -> specster.Control2d:
     """Return a default control 2D"""
-    return specster.Control2d(default_data_path)
+    return specster.Control2d()
+
+
+@pytest.fixture(scope="class")
+def modified_control(tmp_path_factory):
+    """Create a control class, perform several modifications."""
+    tmp_path = tmp_path_factory.mktemp("end_to_end")
+    control = specster.Control2d().copy(tmp_path)
+    # make simulation shorter
+    control.time_steps = 600
+    # first change model params
+    mods = control.models
+    mods[0].rho *= 1.01
+    mods[0].Vp *= 1.01
+    control.models = mods
+    # Then remove all but 1 stations
+    station = control.stations[0]
+    station.xs, station.xz = 2200, 2200
+    control.stations = [station]
+    # Then add a source
+    new_source = control.sources[0].copy()
+    new_source.xs, new_source.zs = 2100, 2100
+    control.sources = control.sources + [new_source]
+    return control
+
+
+@pytest.fixture(scope="class")
+def modified_control_ran(modified_control):
+    """Run the modified control"""
+    modified_control.run().validate()
+    return modified_control
 
 
 @pytest.fixture()

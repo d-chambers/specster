@@ -27,19 +27,19 @@ def command_run_and_stream(command, cwd=None):
         return
 
 
-def run_command(command, cwd=None, print_=True):
+def run_command(command, cwd=None, console=None):
     """Run command, capture and print stderr and stdout."""
     _captured = {"stdout": [], "stderr": [], "return_code": []}
     time_start = time_ns()
-    if print_:
-        print(command)
-        print("-" * len(str(command)))
+    if console:
+        console.print(command)
+        console.print("-" * len(str(command)))
     for key, value in command_run_and_stream(command, cwd=cwd):
         if key != "return_code":
             formatted = value.decode("UTF8").strip()
             _captured[key].append(formatted)
-            if print_:
-                print(formatted)
+            if console:
+                console.print(formatted)
         else:
             _captured["return_code"] = value
     _captured["time_elapsed"] = (time_ns() - time_start) / 1_000_000_000

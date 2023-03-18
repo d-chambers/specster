@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-import specster.utils.waveforms as wf
+import specster.core.waveforms as wf
 
 BASE_TEST_PATH = Path(__file__).parent.parent
 

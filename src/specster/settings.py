@@ -29,6 +29,12 @@ class Settings(BaseSettings):
         default_factory=lambda: Path(__file__).parent.absolute(),
     )
 
+    ci: bool = Field(
+        env="CI",
+        default=False,
+        description="If running on continuous integration.",
+    )
+
     @root_validator()
     def validate_spec_bin(cls, values):
         """Validate the spectral bins"""

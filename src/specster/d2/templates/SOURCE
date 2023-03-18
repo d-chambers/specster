@@ -1,5 +1,4 @@
-{% for source in dis.sources.sources  %}
-
+{% for source in dis.sources.sources  -%}
 ## Source {{ loop.index }}
 source_surf                     = {{ source.disp.source_surf }}  # source inside the medium, or source automatically moved exactly at the surface by the solver
 xs                              = {{ source.disp.xs }}  # source location x in meters

@@ -5,7 +5,7 @@ Tests for control class.
 import pytest
 
 import specster as sp
-from specster.utils.misc import assert_models_equal
+from specster.core.misc import assert_models_equal
 
 
 class TestInit:
@@ -26,6 +26,11 @@ class TestInit:
         control = sp.Control2d()
         assert isinstance(control, sp.Control2d)
 
+    def test_stations_read(self, control_2d_default):
+        """Ensure stations were read in."""
+        stations = control_2d_default.stations
+        assert len(stations) == 22, "should be 22 stations"
+
 
 class TestCopy:
     """Tests for copying runSpec."""
@@ -42,35 +47,20 @@ class TestModify:
     def test_modify_regions(self):
         """Ensure modifying regions also updates nbregions."""
         control = sp.Control2d()
-        region_count = control.par.internal_meshing.regions.nbregions
         control.regions = control.regions[1:]
-        assert region_count + 1 == control.par.internal_meshing.regions.nbregions
+        regions = control.par.internal_meshing.regions
+        assert len(regions.regions) == regions.nbregions
 
 
 @pytest.mark.e2e
+@pytest.mark.slow
 class TestEnd2End:
     """Various end-to-end tests."""
 
-    @pytest.fixture(scope="class")
-    def modified_control(self, tmp_path_factory):
-        """Create a control class, perform several modifications."""
-        tmp_path = tmp_path_factory.mktemp("end_to_end")
-        control = sp.Control2d().copy(tmp_path)
-        # first change model params
-        mods = control.models
-        mods[0].rho *= 1.01
-        mods[0].Vp *= 1.01
-        control.models = mods
-        # Then remove all but 1 stations
-        # sources = control.sources
-        # breakpoint()
-        return control
-
     @pytest.mark.slow
-    def test_write_and_run_default(self, modified_control):
+    def test_write_and_run_default(self, modified_control_ran):
         """Test the default can be written and run."""
-        modified_control.xmeshfem2d()
-        modified_control.xspecfem2d()
+        _ = modified_control_ran.output
 
     # @pytest.mark.slow
     # def

@@ -16,7 +16,7 @@ class Displayer:
     string output of various parameters via getattr.
     """
 
-    def __init__(self, model: specster.utils.models.SpecsterModel):
+    def __init__(self, model: specster.core.models.SpecsterModel):
         """Init new display for model.
 
         Parameters
@@ -34,7 +34,7 @@ class Displayer:
             return value.disp
         elif isinstance(value, Sequence) and not isinstance(value, str):
             return value
-        out = self._model.write_data(key)
+        out = self._model.write_model_data(key)
         return out
 
 

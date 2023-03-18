@@ -5,8 +5,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..utils.control import BaseControl
+from ..core.control import BaseControl
 from .io import SpecParameters2D
+from .output2d import OutPut2D
 
 
 class Control2d(BaseControl):
@@ -18,9 +19,9 @@ class Control2d(BaseControl):
     _template_path = Path(__file__).parent / "templates"
     _control_type = "2D"
 
-    def get_file_paths(self) -> dict[str, Path]:
+    def get_input_paths(self) -> dict[str, Path]:
         """
-        Return a dict of important paths.
+        Return a dict of input file paths.
 
         The names should match the template file names.
         """
@@ -32,10 +33,25 @@ class Control2d(BaseControl):
         )
         return out
 
+    @property
+    def output(self) -> OutPut2D:
+        """return the output of the control."""
+        return OutPut2D(self.output_path)
+
+    def run(self) -> OutPut2D:
+        """Run the simulation."""
+        # Determine if internal mesher should be run
+        use_stations = self.par.receivers.use_existing_stations
+        use_external = self.par.external_meshing.read_external_mesh
+        if not (use_external and use_stations):
+            self.xmeshfem2d()
+        self.xspecfem2d()
+        return self.output
+
     def xmeshfem2d(self, print_=True):
         """Run the 2D mesher."""
-        return self._run_spec_command("xmeshfem2D", print_=print_)
+        return self._run_spec_command("xmeshfem2D")
 
     def xspecfem2d(self, print_=True):
         """Run 2D specfem."""
-        return self._run_spec_command("xspecfem2D", print_=print_)
+        return self._run_spec_command("xspecfem2D")

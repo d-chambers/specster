@@ -5,7 +5,7 @@
 #-----------------------------------------------------------
 
 # title of job
-title                           = Test of SPECFEM2D with curved interfaces
+title                           = Default specster parfile
 
 # forward or adjoint simulation
 # 1 = forward, 2 = adjoint, 3 = both simultaneously
@@ -169,7 +169,7 @@ save_binary_seismograms_double  = .false.        # save seismograms in double pr
 SU_FORMAT                       = .false.        # output single precision binary seismograms in Seismic Unix format (adjoint traces will be read in the same format)
 
 # use an existing STATION file found in ./DATA or create a new one from the receiver positions below in this Par_file
-use_existing_STATIONS           = .false.
+use_existing_STATIONS           = .true.
 
 # number of receiver sets (i.e. number of receiver lines to create below)
 nreceiversets                   = 2

@@ -4,7 +4,7 @@ Tests for specster utilities.
 
 import pytest
 
-from specster.utils.render import number_to_spec_str
+from specster.core.render import number_to_spec_str
 
 
 class TestNumberToSpecStr:

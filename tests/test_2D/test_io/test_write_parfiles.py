@@ -20,6 +20,6 @@ class TestWriteProject:
 
     def test_directories_exist(self, written_control):
         """Ensure the required directories were created."""
-        paths = written_control.get_file_paths()
+        paths = written_control.get_input_paths()
         for path in paths.values():
             assert path.exists()

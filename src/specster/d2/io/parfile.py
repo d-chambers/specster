@@ -9,23 +9,14 @@ from typing import List, Literal, Optional, Self
 from pydantic import Field
 
 from specster.constants import _ENUM_MAP, _MEANING_MAP
+from specster.core.misc import find_file_startswith, write_model_data
+from specster.core.models import AbstractParameterModel, SpecFloat, SpecsterModel
+from specster.core.parse import extract_parline_key_value, iter_file_lines
+from specster.core.render import dict_to_description
+from specster.core.stations import Station2D, read_stations
 from specster.exceptions import UnhandledParFileLine
-from specster.utils.misc import SizeOfDescriptor, find_file_startswith
-from specster.utils.models import AbstractParameterModel, SpecFloat, SpecsterModel
-from specster.utils.parse import extract_parline_key_value, iter_file_lines
-from specster.utils.render import dict_to_description
 
 SOURCE_REG = re.compile(fnmatch.translate("source*"), re.IGNORECASE)
-
-
-def read_stations(value, path, **kwargs):
-    """Read stations from an external file."""
-    if not value:  # nothing to do
-        return []
-    station_path = find_file_startswith(path.parent, "STATIONS")
-    assert station_path.exists()
-    stations = [Station.read_line(line) for line in iter_file_lines(station_path)]
-    return stations
 
 
 # --- Material Models
@@ -50,10 +41,7 @@ class AbstractMaterialModelType(SpecsterModel):
         # need to strip out model type, if we got here its already handled.
         return super().read_line(params)
 
-    def write_data(self, key: Optional[str] = None):
-        """Write the model data."""
-        param_list = [self.get_formatted_str(x) for x in self.__fields__]
-        return " ".join(param_list)
+    write_model_data = write_model_data
 
 
 class ElasticModel(AbstractMaterialModelType):
@@ -160,11 +148,15 @@ class MaterialModels(AbstractParameterModel):
     Class to hold information about material properties.
     """
 
-    nbmodels: Optional[int]
     models: List[AbstractMaterialModelType]
     tomography_file: Optional[Path] = Field(
         None, description="External tomography file"
     )
+
+    @property
+    def nbmodels(self) -> int:
+        """Get the number of regions."""
+        return len(self.models)
 
     @classmethod
     def read_material_properties(cls, value, iterator, **kwargs):
@@ -199,7 +191,7 @@ class Region2D(SpecsterModel):
     nzmax: int = Field(ge=1, description="ending z element")
     material_number: int = Field(ge=1, description="material applied to region")
 
-    def write_data(self, key: Optional[str] = None):
+    def write_model_data(self, key: Optional[str] = None):
         """Write data to file."""
         field_names = [f"{getattr(self, x):d}" for x in self.__fields__]
         out = " ".join(field_names)
@@ -209,8 +201,12 @@ class Region2D(SpecsterModel):
 class Regions(AbstractParameterModel):
     """Tracks regions in the model."""
 
-    nbregions: int = SizeOfDescriptor("regions")
     regions: List[Region2D]
+
+    @property
+    def nbregions(self) -> int:
+        """Get the number of regions."""
+        return len(self.regions)
 
     @classmethod
     def read_regions(cls, value, iterator, **kawrgs):
@@ -335,7 +331,10 @@ class Source(SpecsterModel):
 class Sources(AbstractParameterModel):
     """Controls the source parameters (under Source section)."""
 
-    nsources: int = Field(1, description="number of sources")
+    @property
+    def nsources(self) -> int:
+        """Get the number of sources."""
+        return len(self.sources)
 
     force_normal_to_surface: bool = Field(
         False,
@@ -392,18 +391,6 @@ class Sources(AbstractParameterModel):
         return sources
 
 
-class Station(SpecsterModel):
-    """A single station."""
-
-    station: str = Field("001", description="station name")
-    network: str = Field("UU", description="network name")
-    xs: SpecFloat = Field(0.0, description="X location in meters")
-    xz: SpecFloat = Field(0.0, description="Z location in meters")
-    # TODO: See what these columns actually are
-    void1_: str = ""
-    void2_: str = ""
-
-
 class ReceiverSet(SpecsterModel):
     """A single receiver set."""
 
@@ -425,14 +412,13 @@ class ReceiverSet(SpecsterModel):
         True,
         description="fix receivers at the surface",
     )
-    write_data = SpecsterModel.write_data
+    write_model_data = SpecsterModel.write_model_data
     disp = SpecsterModel.disp
 
 
 class ReceiverSets(AbstractParameterModel):
     """Class containing multiple receiver sets."""
 
-    nreceiversets: int = Field(description="Number of receiver sets")
     anglerec: SpecFloat = Field(
         0.0, description="angle to rotate components at receivers"
     )
@@ -441,6 +427,11 @@ class ReceiverSets(AbstractParameterModel):
         description="base anglerec normal to surface",
     )
     receiver_sets: List[ReceiverSet]
+
+    @property
+    def nreceiversets(self) -> int:
+        """Get the number of receiver sets."""
+        return len(self.receiver_sets)
 
     @classmethod
     def read_receiver_sets(cls, value, iterator, state, **kwargs):
@@ -502,7 +493,15 @@ class Receivers(AbstractParameterModel):
     receiver_sets: ReceiverSets
 
     # stations from external files
-    stations: List[Station]
+    stations: List[Station2D]
+
+    # @pydantic.root_validator(pre=True)
+    # def get_stations(cls, values):
+    #     """Read in external station file if specified."""
+    #     use_stations = values.get('use_existing_stations', False)
+    #     if not use_stations:
+    #         return values
+    #     station_path =
 
 
 class AdjointKernel(AbstractParameterModel):
@@ -789,7 +788,7 @@ class SpecParameters2D(AbstractParameterModel):
 # keys that require weird parsing rules. The key triggers
 # the calling of the function and the output is stored in
 # the second argument
-_MULTILINE_KEYS = {
+_SPECIAL_KEYS = {
     "nbregions": (Regions.read_regions, "regions"),
     "nbmodels": (MaterialModels.read_material_properties, "material_models"),
     "nreceiversets": (ReceiverSets.read_receiver_sets, "receiver_sets"),
@@ -817,8 +816,8 @@ def parse_parfile(path: Path) -> dict:
             key, value = extract_parline_key_value(line)
             out[key] = value
             # Need to handle special parsing of some keys
-            if key in _MULTILINE_KEYS:
-                func, name = _MULTILINE_KEYS[key]
+            if key in _SPECIAL_KEYS:
+                func, name = _SPECIAL_KEYS[key]
                 out[name] = func(
                     value=value,
                     iterator=iterator,

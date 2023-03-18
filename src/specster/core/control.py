@@ -9,20 +9,32 @@ from functools import cache
 from pathlib import Path
 from typing import Optional, Self
 
-import obspy
-
 import specster
-from specster.utils.callout import run_command
-from specster.utils.misc import (
+from specster.core.callout import run_command
+from specster.core.misc import (
     SequenceDescriptor,
     find_base_path,
     find_data_path,
     get_control_default_path,
     load_templates_from_directory,
 )
-from specster.utils.models import SpecsterModel
-from specster.utils.printer import console, print_output_run
-from specster.utils.waveforms import read_ascii_stream
+from specster.core.models import SpecsterModel
+from specster.core.output import BaseOutput
+from specster.core.printer import console, program_render
+from specster.core.stations import read_stations
+
+
+def _maybe_use_station_file(self: "BaseControl", station_list):
+    """Maybe use the station file, switch appropriate params."""
+    # set use existing stations
+    use_stations = bool(station_list)
+    self.par.receivers.use_existing_stations = use_stations
+    # then read station_file if needed
+    if use_stations:
+        stations = read_stations(True, self.base_path / "DATA" / "STATIONS")
+        self.par.receivers.stations = stations
+    else:
+        self.par.receivers.stations = []
 
 
 class BaseControl:
@@ -31,6 +43,7 @@ class BaseControl:
     base_path: Path = None
     # True when the current state has been writen to disk.
     _writen: bool = False
+    _read_only = False
     _template_path = None
     _spec_parameters = SpecsterModel
     _control_type: Optional[str] = None
@@ -38,32 +51,32 @@ class BaseControl:
     sources = SequenceDescriptor("par.sources.sources")
     models = SequenceDescriptor("par.material_models.models")
     stations = SequenceDescriptor("par.receivers.stations")
-    receiver_sets = SequenceDescriptor("par.receivers.receiver_sets")
+    receiver_sets = SequenceDescriptor(
+        "par.receivers.receiver_sets",
+        set_functions=(_maybe_use_station_file,),
+    )
     regions = SequenceDescriptor("par.internal_meshing.regions.regions")
+    dt = SequenceDescriptor("par.dt")
+    time_steps = SequenceDescriptor("par.nstep")
 
     def __init__(
         self, base_path: Optional[Path] = None, spec_bin_path: Optional[Path] = None
     ):
         if base_path is None:
             base_path = get_control_default_path(self._control_type)
+            self._read_only = True  # don't overwrite base files
         self.base_path = find_base_path(Path(base_path))
         self._spec_bin_path = Path(spec_bin_path or specster.settings.spec_bin_path)
         self.par = self._spec_parameters.from_file(self._data_path)
         self._writen = True
+
+    # --- Properties for all control subclasses
 
     @property
     def _data_path(self):
         out = find_data_path(self.base_path)
         out.mkdir(exist_ok=True, parents=True)
         return out
-
-    @abc.abstractmethod
-    def get_file_paths(self) -> dict[str, Path]:
-        """
-        Return a dict of important paths.
-
-        The names should match the template file names.
-        """
 
     @property
     def _par_file_path(self):
@@ -81,6 +94,27 @@ class BaseControl:
     def _interfaces_path(self):
         return self._data_path / "interfaces.dat"
 
+    # --- Abstract methods which need to be implemented.
+
+    @abc.abstractmethod
+    def get_input_paths(self) -> dict[str, Path]:
+        """
+        Return a dict of input file paths.
+
+        The names should match the template file names.
+        """
+
+    @property
+    @abc.abstractmethod
+    def output(self) -> BaseOutput:
+        """Return an output object for working with simulation output."""
+
+    @abc.abstractmethod
+    def run(self) -> BaseOutput:
+        """Run the simulation."""
+
+    # --- General methods
+
     def copy(self, path: Optional[Path] = None) -> Self:
         """Copy control2D and specify a new path.
 
@@ -94,6 +128,7 @@ class BaseControl:
         assert not path.is_file(), "must pass a directory."
         new = copy.deepcopy(self)
         new._writen = False
+        new._read_only = False
         new.base_path = path
         return new
 
@@ -114,10 +149,11 @@ class BaseControl:
         -------
         A new instance of Control with basepath updated.
         """
+        assert not self._read_only, "control is read only"
         if path is not None:
             self = self.copy(path)  # NOQA
         templates = load_templates_from_directory(self._template_path)
-        paths = self.get_file_paths()
+        paths = self.get_input_paths()
         assert set(paths).issubset(set(templates))
         disp = self.par.disp
         for name, template in templates.items():
@@ -134,12 +170,6 @@ class BaseControl:
         with path.open("w") as fi:
             fi.write(text)
 
-    @property
-    def empty_output(self):
-        """Return True if the output directory is empty"""
-        out = self.get_output_path()
-        return len(list(out.glob("*"))) == 0
-
     @cache
     def _load_templates(self) -> dict[str, Path]:
         """
@@ -150,52 +180,53 @@ class BaseControl:
             out[p.name.lower()] = p
         return out
 
-    def get_output_path(self):
+    def ensure_output_path_exists(self):
+        """Ensure the output directory has been created."""
+        self.output_path.mkdir(exist_ok=True, parents=True)
+        return self.output_path
+
+    @property
+    def output_path(self):
         """Get the output directory path, create it if it isn't there."""
-        expected = self.base_path / "OUTPUT_FILES"
-        expected.mkdir(exist_ok=True, parents=True)
-        return expected
+        return self.base_path / "OUTPUT_FILES"
 
     def clear_outputs(self):
         """Remove output directory."""
-        path = self.get_output_path()
-        shutil.rmtree(path)
+        path = self.output_path
+        if path.exists():
+            shutil.rmtree(path)
 
-    def _write_output_file(self, text, name):
+    def _write_output_file(self, text, name, console=None):
         """Write text to the output directory"""
-        out_path = self.get_output_path() / name
+        out_path = self.output_path / name
         if not isinstance(text, str):
             text = "\n".join(text)
         # dont write empty file
         if text:
             with open(out_path, "w") as fi:
                 fi.write(text)
+            if console:
+                console.print(f"writing {out_path}")
 
-    def _run_spec_command(self, command: str, print_=True):
+    def _run_spec_command(self, command: str):
         """Run a specfem command."""
-        console.rule(
-            f"[bold red]Running specfem command: {command} on {self.base_path}"
-        )
-        if not self._writen:
-            self.write()
-            self._writen = True
-        self.get_output_path()
-        bin = self._spec_bin_path / command
-        assert bin.exists()
-        out = run_command(str(bin), cwd=self.base_path, print_=print_)
+
+        with program_render(console, title=command):
+            console.rule(
+                f"[bold red]Running specfem command: {command} on {self.base_path}"
+            )
+            if not self._writen:
+                self.write()
+                self._writen = True
+            self.ensure_output_path_exists()
+            bin = self._spec_bin_path / command
+            assert bin.exists()
+            out = run_command(str(bin), cwd=self.base_path, console=console)
         out["command"], out["path"] = command, self.base_path
         # write ouput
-        if print_:
-            self._write_output_file(out["stdout"], f"{command}_stdout.txt")
-            self._write_output_file(out["stderr"], f"{command}_stderr.txt")
-        # raise exception if command was not successful
-        print_output_run(out)
-
+        self._write_output_file(out["stdout"], f"{command}_stdout.txt", console)
+        self._write_output_file(out["stderr"], f"{command}_stderr.txt", console)
         return out
-
-    def get_waveforms(self) -> obspy.Stream:
-        """Read all waveforms in the output."""
-        return read_ascii_stream(self.get_output_path())
 
     def __str__(self):
         msg = f"{self.__class__.__name__} with basepath {self.base_path}"

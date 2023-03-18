@@ -1,7 +1,7 @@
 """
 Tests for running commands.
 """
-from specster.utils.callout import run_command
+from specster.core.callout import run_command
 
 
 class TestBasic:

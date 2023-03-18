@@ -13,6 +13,7 @@ class SpecsterModel(BaseModel):
     class Config:
         """Configuration for models."""
 
+        extra = "ignore"
         validate_assignment = True  # validators run on assignment
         keep_untouched = (cached_property,)
 
@@ -29,7 +30,7 @@ class SpecsterModel(BaseModel):
     @cached_property
     def disp(self):
         """Return a displayer for nicely rendering contents."""
-        from specster.utils.render import Displayer
+        from specster.core.render import Displayer
 
         return Displayer(self)
 
@@ -43,7 +44,7 @@ class SpecsterModel(BaseModel):
             value = formatter_dict[field.type_](value)
         return str(value)
 
-    def write_data(self, key: Optional[str] = None):
+    def write_model_data(self, key: Optional[str] = None):
         """Write the data contained in key to a string."""
         if key is None:
             msg = f"{self.__class__.__name__} requires a specified field"
@@ -54,7 +55,7 @@ class SpecsterModel(BaseModel):
     @cached_property
     def _parser_dict(self):
         """Return the dict used for parsing."""
-        from specster.utils.render import format_bool, number_to_spec_str
+        from specster.core.render import format_bool, number_to_spec_str
 
         out = {bool: format_bool, SpecFloat: number_to_spec_str}
         return out

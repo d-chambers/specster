@@ -1,10 +1,9 @@
 """
 Misc small utilities.
 """
-import copy
 from functools import cache
 from pathlib import Path
-from typing import Literal
+from typing import Dict, Literal, Optional
 
 import numpy as np
 from jinja2 import Template
@@ -60,7 +59,7 @@ def load_templates_text_from_directory(path: Path) -> dict:
 
 
 @cache
-def load_templates_from_directory(path: Path) -> dict:
+def load_templates_from_directory(path: Path) -> Dict[str, Template]:
     """Load all templates in directory."""
     text_dict = load_templates_text_from_directory(path)
     out = {i: Template(v) for i, v in text_dict.items()}
@@ -106,11 +105,25 @@ def get_control_default_path(control: Literal["2D", "3D", None] = "2D") -> Path:
         raise ValueError(msg)
 
 
-class SequenceDescriptor:
-    """A descriptor for returning/setting discriptors."""
+def write_model_data(self, key: Optional[str] = None):
+    """Write the model data."""
+    param_list = [self.get_formatted_str(x) for x in self.__fields__]
+    return " ".join(param_list)
 
-    def __init__(self, attribute: str):
+
+class SequenceDescriptor:
+    """
+    A descriptor for returning/setting nested values in par structure.
+
+    Set_functions and get_functions will be called after setting and
+    getting values. These are useful for updating related values.
+    Both of these should take the instance as the first argument.
+    """
+
+    def __init__(self, attribute: str, set_functions=(), get_functions=()):
         self._attributes = attribute.split(".")
+        self.set_functions = set_functions
+        self.get_functions = get_functions
 
     def __set_name__(self, owner, name):
         self._name = name
@@ -119,29 +132,14 @@ class SequenceDescriptor:
         out = instance
         for attr in self._attributes:
             out = getattr(out, attr)
-        return copy.deepcopy(out)
+        for func in self.get_functions:
+            func(instance, out)
+        return out
 
     def __set__(self, instance, value):
         base_attr = instance
         for attr in self._attributes[:-1]:
             base_attr = getattr(base_attr, attr)
         setattr(base_attr, self._attributes[-1], value)
-
-
-class SizeOfDescriptor:
-    """
-    A descriptor which returns the size of a sequence attached to instance.
-    """
-
-    def __init__(self, sequence_attr):
-        self._sequence_attr = sequence_attr
-
-    def __set_name__(self, owner, name):
-        self._name = name
-
-    def __get__(self, instance, owner):
-        seq = getattr(instance, self._sequence_attr)
-        return len(seq)
-
-    def __set__(self, instance, value):
-        pass  # allow passing so values can be parsed.
+        for func in self.set_functions:
+            func(instance, value)
