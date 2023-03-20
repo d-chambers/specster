@@ -20,10 +20,12 @@ TEST_PATH_2D = Path(__file__).absolute().parent / "test_2D"
 
 TEST_DATA_2D_PATH = TEST_PATH_2D / "test_data"
 
-specster.settings.assert_specfem_available()
-
 # Path to the example directory
-EXAMPLE_PATH = specster.settings.spec_path / "EXAMPLES"
+if specster.settings.specfem2d_path is None:
+    msg = "Cannot run 2D tests until specfem2d path is set!"
+    raise ValueError(msg)
+
+EXAMPLE_PATH = specster.settings.specfem2d_path / "EXAMPLES"
 
 PAR_FILES = list(EXAMPLE_PATH.rglob("Par_file*"))
 
@@ -59,7 +61,7 @@ def get_data_directories():
 def default_data_path(tmp_path_factory) -> Path:
     """Return the path to the default data directory."""
     new = tmp_path_factory.mktemp("Default_DATA")
-    path = specster.settings.spec_path / "DATA"
+    path = specster.settings.specfem2d_path / "DATA"
     shutil.copytree(path, new / "DATA")
     return new
 
@@ -117,7 +119,7 @@ def control_2d_default() -> specster.Control2d:
     return specster.Control2d()
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture(scope="session")
 def modified_control(tmp_path_factory):
     """Create a control class, perform several modifications."""
     tmp_path = tmp_path_factory.mktemp("end_to_end")
@@ -140,7 +142,7 @@ def modified_control(tmp_path_factory):
     return control
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture(scope="session")
 def modified_control_ran(modified_control):
     """Run the modified control"""
     modified_control.run().validate()

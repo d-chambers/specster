@@ -3,7 +3,7 @@ Tests for loading/configuring settings.
 """
 
 import specster
-from specster.settings import Settings, read_settings, write_settings
+from specster._settings import Settings, read_settings, write_settings
 
 
 class TestBasic:

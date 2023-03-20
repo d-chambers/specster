@@ -1,14 +1,16 @@
 """
 A module for controlling the output of simulations.
 """
+import abc
 from pathlib import Path
 
 import obspy
 
+from specster.core.models import SpecsterModel
 from specster.core.waveforms import read_ascii_stream
 
 
-class BaseOutput:
+class BaseOutput(abc.ABC):
     """
     Class to control the output of a simulation.
     """
@@ -16,6 +18,7 @@ class BaseOutput:
     validators = []
     _required_files = ()
     _optional_files = ()
+    stats: SpecsterModel
 
     def __init__(self, path):
         self.path = Path(path)
@@ -31,7 +34,7 @@ class BaseOutput:
             getattr(self, method_name)()
         return self
 
-    def _validate_required_files(self):
+    def _check_required_files_exist(self):
         """Ensure required files exist."""
         for file_name in self._required_files:
             assert (self.path / file_name).exists()

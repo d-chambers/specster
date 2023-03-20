@@ -9,7 +9,6 @@ from functools import cache
 from pathlib import Path
 from typing import Optional, Self
 
-import specster
 from specster.core.callout import run_command
 from specster.core.misc import (
     SequenceDescriptor,
@@ -21,20 +20,7 @@ from specster.core.misc import (
 from specster.core.models import SpecsterModel
 from specster.core.output import BaseOutput
 from specster.core.printer import console, program_render
-from specster.core.stations import read_stations
-
-
-def _maybe_use_station_file(self: "BaseControl", station_list):
-    """Maybe use the station file, switch appropriate params."""
-    # set use existing stations
-    use_stations = bool(station_list)
-    self.par.receivers.use_existing_stations = use_stations
-    # then read station_file if needed
-    if use_stations:
-        stations = read_stations(True, self.base_path / "DATA" / "STATIONS")
-        self.par.receivers.stations = stations
-    else:
-        self.par.receivers.stations = []
+from specster.core.stations import _maybe_use_station_file
 
 
 class BaseControl:
@@ -59,14 +45,11 @@ class BaseControl:
     dt = SequenceDescriptor("par.dt")
     time_steps = SequenceDescriptor("par.nstep")
 
-    def __init__(
-        self, base_path: Optional[Path] = None, spec_bin_path: Optional[Path] = None
-    ):
+    def __init__(self, base_path: Optional[Path] = None):
         if base_path is None:
             base_path = get_control_default_path(self._control_type)
             self._read_only = True  # don't overwrite base files
         self.base_path = find_base_path(Path(base_path))
-        self._spec_bin_path = Path(spec_bin_path or specster.settings.spec_bin_path)
         self.par = self._spec_parameters.from_file(self._data_path)
         self._writen = True
 
@@ -110,8 +93,8 @@ class BaseControl:
         """Return an output object for working with simulation output."""
 
     @abc.abstractmethod
-    def run(self) -> BaseOutput:
-        """Run the simulation."""
+    def run(self, output_path=None) -> BaseOutput:
+        """Run the simulation, optionally copy the output folder."""
 
     # --- General methods
 
@@ -121,7 +104,7 @@ class BaseControl:
         Parameters
         ----------
         Path
-            The Path to a new directory. If None use a temp
+            The Path to a new directory. If None, use a temp
             directory.
         """
         path = path or Path(tempfile.TemporaryDirectory().name)
@@ -208,25 +191,35 @@ class BaseControl:
             if console:
                 console.print(f"writing {out_path}")
 
-    def _run_spec_command(self, command: str):
+    def _run_spec_command(self, command: str, bin_path):
         """Run a specfem command."""
 
         with program_render(console, title=command):
+            bin = bin_path / command
+            assert bin.exists(), f"binary {bin} doesn't exist!"
             console.rule(
-                f"[bold red]Running specfem command: {command} on {self.base_path}"
+                f"[bold red]Running specfem command: {command} on "
+                f"{self.base_path} with binary {bin}",
             )
             if not self._writen:
                 self.write()
                 self._writen = True
             self.ensure_output_path_exists()
-            bin = self._spec_bin_path / command
-            assert bin.exists()
             out = run_command(str(bin), cwd=self.base_path, console=console)
         out["command"], out["path"] = command, self.base_path
         # write ouput
         self._write_output_file(out["stdout"], f"{command}_stdout.txt", console)
         self._write_output_file(out["stderr"], f"{command}_stderr.txt", console)
         return out
+
+    def _copy_inputs_to_outputs(self):
+        """Copy the input files to the output directory."""
+        self.ensure_output_path_exists()
+        output_path = self.output_path
+        for _, input_file in self.get_input_paths().items():
+            if not input_file.exists():
+                continue
+            shutil.copy2(input_file, output_path / input_file.name)
 
     def __str__(self):
         msg = f"{self.__class__.__name__} with basepath {self.base_path}"

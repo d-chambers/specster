@@ -6,6 +6,7 @@ import pytest
 
 import specster as sp
 from specster.core.misc import assert_models_equal
+from specster.d2.control2d import load_2d_example
 
 
 class TestInit:
@@ -52,6 +53,18 @@ class TestModify:
         assert len(regions.regions) == regions.nbregions
 
 
+class TestLoad2DExamples:
+    """Ensure a 2D example can be loaded."""
+
+    def test_load_tromp(self):
+        """Laod one of the simple examples."""
+        spec2d_path = sp.settings.specfem2d_path
+        if spec2d_path is None or not spec2d_path.exists():
+            pytest.skip("Specfem2d is not on source computer.")
+        control = load_2d_example("Tromp2005")
+        assert isinstance(control, sp.Control2d)
+
+
 @pytest.mark.e2e
 @pytest.mark.slow
 class TestEnd2End:
@@ -60,7 +73,8 @@ class TestEnd2End:
     @pytest.mark.slow
     def test_write_and_run_default(self, modified_control_ran):
         """Test the default can be written and run."""
-        _ = modified_control_ran.output
+        output = modified_control_ran.output
+        assert output.path.exists()
 
     # @pytest.mark.slow
     # def

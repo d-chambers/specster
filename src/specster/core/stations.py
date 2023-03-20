@@ -59,3 +59,16 @@ class Station2D(SpecsterModel):
                 str_val = f"{val}"
             out.append(str_val.rjust(self._spaces[field]))
         return "".join(out)
+
+
+def _maybe_use_station_file(self, station_list):
+    """Maybe use the station file, switch appropriate params."""
+    # set use existing stations
+    use_stations = bool(station_list)
+    self.par.receivers.use_existing_stations = use_stations
+    # then read station_file if needed
+    if use_stations:
+        stations = read_stations(True, self.base_path / "DATA" / "STATIONS")
+        self.par.receivers.stations = stations
+    else:
+        self.par.receivers.stations = []

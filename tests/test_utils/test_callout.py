@@ -16,7 +16,7 @@ class TestBasic:
 
     def test_bad_command(self):
         """Ensure a bad command returns a non-zero code and stderr list."""
-        out = run_command("bbbbbadbbcommandls", print_=False)
+        out = run_command("bbbbbadbbcommandls")
         assert out["stderr"]
         assert not out["stdout"]
         assert "not found" in "".join(out["stderr"])

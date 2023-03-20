@@ -1,6 +1,7 @@
 """
 Misc small utilities.
 """
+import re
 from functools import cache
 from pathlib import Path
 from typing import Dict, Literal, Optional
@@ -43,6 +44,26 @@ def find_base_path(path):
     if path.name in special_dirs:
         return path.parent
     return path
+
+
+def match_between(text, start, end="$"):
+    """
+    Scan through text and find text between start/end string.
+
+    Parameters
+    ----------
+    text
+        The string to search
+    start
+        The starting string
+    end
+        The ending string, default matches on line ends.
+    """
+
+    regex = f"{start}(.*?){end}"
+    out = re.search(regex, text, re.MULTILINE)
+    assert out is not None, f"{regex} return nothing!"
+    return out.group(1).replace("=", "").strip()
 
 
 @cache
