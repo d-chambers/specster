@@ -50,6 +50,7 @@ dependencies = [
     "matplotlib",
     "jinja2",
     "rich",
+    "pyvista",
 ]
 
 [project.optional-dependencies]

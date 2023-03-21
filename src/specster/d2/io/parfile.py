@@ -373,21 +373,27 @@ class Sources(AbstractParameterModel):
     def read_sources(value, path, **kwargs):
         """Read the sources"""
         source_count = int(value)
-        iterable = (x for x in path.parent.glob("*") if SOURCE_REG.match(str(x.name)))
-        sorted_source_files = sorted(iterable, key=lambda x: x.name)
+        out = Sources.read_source_file(Path(path).parent, source_count)
+        assert len(out) == source_count
+        return out
+
+    @staticmethod
+    def read_source_file(base_path, file_count=1) -> List[Source]:
+        """Read the source file(s)."""
         sources = []
-        for path in sorted_source_files[:source_count]:
+        iterable = (x for x in base_path.glob("*") if SOURCE_REG.match(str(x.name)))
+        sorted_source_files = sorted(iterable, key=lambda x: x.name)
+        for path in sorted_source_files[:file_count]:
             source_kwargs = {}
             iterator = iter_file_lines(path)
             for line in iterator:
-                key, value = extract_parline_key_value(line)
+                key, value_ = extract_parline_key_value(line)
                 # This marks the start of a new event
                 if key == "source_surf" and len(source_kwargs):
                     sources.append(Source(**source_kwargs))
-                source_kwargs[key] = value
+                source_kwargs[key] = value_
             # also need to scoop up last event
             sources.append(Source(**source_kwargs))
-        assert len(sources) == source_count
         return sources
 
 

@@ -38,4 +38,3 @@ class TestBasic:
         assert len(df_liquid) and len(df_solid)
         assert isinstance(df_liquid, pd.DataFrame)
         assert isinstance(df_solid, pd.DataFrame)
-        print(basic_output)

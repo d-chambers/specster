@@ -3,7 +3,6 @@ Modules for storing various misfit functions.
 """
 import abc
 from functools import cache
-from pathlib import Path
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -13,7 +12,6 @@ import pandas as pd
 from matplotlib.lines import Line2D
 from obspy.signal.cross_correlation import correlate, xcorr_max
 from scipy.integrate import simps
-from utils import read_trace, save_trace
 
 matplotlib.rcParams.update({"font.size": 14})
 
@@ -21,58 +19,26 @@ matplotlib.rcParams.update({"font.size": 14})
 class _BaseMisFit(abc.ABC):
     _component_colors = {"Z": "orange", "X": "cyan", "Y": "Red"}
 
-    def __init__(self, observed_path, synthetic_path):
+    def __init__(self, observed_st, synthetic_st):
         """Read in the streams for each directory."""
-        self.st_obs = self.load_streams(observed_path)
-        self.st_synth = self.load_streams(synthetic_path)
+        self.st_obs = observed_st.sort()
+        self.st_synth = synthetic_st.sort()
         self.validate_streams()
-
-    def preprocess(self, st):
-        """Preprocess the streams."""
-        import local
-
-        freq_min = local.bandwidth[0]
-        freq_max = local.bandwidth[1]
-
-        out = (
-            st.detrend("linear")
-            .taper(0.05)
-            .filter("bandpass", freqmin=freq_min, freqmax=freq_max)
-        )
-        return out
 
     def validate_streams(self):
         """Custom validation for streams."""
         st1 = self.st_obs
         st2 = self.st_synth
         assert len(st1) == len(st2)
-        assert {tr.id for tr in st1} == {tr.id for tr in st2}
-
-    def load_streams(self, directory_path):
-        """Load all streams in a directory."""
-        traces = []
-        for path in Path(directory_path).rglob("*semd*"):
-            traces.append(read_trace(str(path)))
-        st = self.preprocess(obspy.Stream(traces).sort())
-        return st
+        for tr1, tr2 in zip(st1, st2):
+            assert tr1.id == tr2.id
+            assert tr1.stats.sampling_rate == tr2.stats.sampling_rate
 
     def iterate_streams(self):
         """Iterate streams, yield corresponding traces for obs and synth"""
         st_obs, st_synth = self.st_obs, self.st_synth
         for tr_obs, tr_synth in zip(st_obs, st_synth):
-            assert tr_obs.id == tr_synth.id
-            assert tr_obs.stats.sampling_rate == tr_synth.stats.sampling_rate
             yield tr_obs, tr_synth
-
-    def save_adjoint_sources(self, path="SEM"):
-        """Save adjoint sources to disk."""
-        path = Path(path)
-        path.mkdir(exist_ok=True, parents=True)
-        for tr in self.get_adjoint_sources().values():
-            stats = tr.stats
-            name = f"{stats.network}.{stats.station}.{stats.channel}.adj"
-            new_path = path / name
-            save_trace(tr, new_path)
 
     @abc.abstractmethod
     def calc_misfit(self) -> dict[str, float]:
@@ -149,10 +115,10 @@ class WaveformMisFit(_BaseMisFit):
 
     Parameters
     ----------
-    observed_path
-        The directory containing the observed data.
-    synthetic_path
-        The directory containing the synthetic data.
+    observed_st
+        The observed stream
+    synthetic_st
+        The calculated stream
     """
 
     @cache
@@ -165,14 +131,14 @@ class WaveformMisFit(_BaseMisFit):
         return out
 
     @cache
-    def get_adjoint_sources(self):
+    def get_adjoint_sources(self) -> obspy.Stream:
         """Return the adjoint source trace."""
-        out = {}
+        out = []
         for tr_obs, tr_synth in self.iterate_streams():
             new = tr_obs.copy()
             new.data = tr_synth.data - tr_obs.data
-            out[tr_synth.id] = new
-        return out
+            out.append(new)
+        return obspy.Stream(out)
 
 
 class TravelTimeMisFit(_BaseMisFit):
@@ -181,9 +147,9 @@ class TravelTimeMisFit(_BaseMisFit):
 
     Parameters
     ----------
-    observed_path
+    observed_st
         The directory containing the observed data.
-    synthetic_path
+    synthetic_st
         The directory containing the synthetic data.
     trace_min
         A ratio to zero-out very low amplitude traces
@@ -192,10 +158,10 @@ class TravelTimeMisFit(_BaseMisFit):
         this ratio, zero its adjoint.
     """
 
-    def __init__(self, observed_path, synthetic_path, trace_min=0.01):
+    def __init__(self, observed_st, synthetic_st, trace_min=0.01):
         """Read in the streams for each directory."""
         self._trace_min = trace_min
-        super().__init__(observed_path, synthetic_path)
+        super().__init__(observed_st, synthetic_st)
 
     @cache
     def calc_trace_absmax(self):
@@ -239,7 +205,7 @@ class TravelTimeMisFit(_BaseMisFit):
     @cache
     def get_adjoint_sources(self):
         """Return the adjoint source trace."""
-        out = {}
+        out = []
         tt_diffs = self.calc_tt_diff()
         norms = self.calc_normalization()
         for tr_obs, tr_synth in self.iterate_streams():
@@ -253,8 +219,8 @@ class TravelTimeMisFit(_BaseMisFit):
             if self._should_zero_trace(tid):
                 data = np.zeros_like(data)
             out_tr.data = data
-            out[tid] = out_tr
-        return out
+            out.append(out_tr)
+        return obspy.Stream(out)
 
     def _should_zero_trace(self, tid):
         """Return true if data should be zeroes"""
@@ -270,16 +236,16 @@ class AmplitudeMisFit(_BaseMisFit):
 
     Parameters
     ----------
-    observed_path
+    observed_st
         The directory containing the observed data.
-    synthetic_path
+    synthetic_st
         The directory containing the synthetic data.
     """
 
-    def __init__(self, observed_path, synthetic_path, trace_min=0.01):
+    def __init__(self, observed_st, synthetic_st, trace_min=0.01):
         """Read in the streams for each directory."""
         self._trace_min = trace_min
-        super().__init__(observed_path, synthetic_path)
+        super().__init__(observed_st, synthetic_st)
 
     @cache
     def calc_trace_absmax(self):

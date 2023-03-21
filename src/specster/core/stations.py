@@ -1,6 +1,8 @@
 """
 Module for working with station data.
 """
+from pathlib import Path
+
 from pydantic import Field
 
 from specster.core.misc import find_file_startswith
@@ -13,9 +15,12 @@ def read_stations(value, path, **kwargs):
     # Note: value is poorly named but required for compat with
     # other special functions in parsing logic. See constructs in
     # the par file for more details.
+    path = Path(path)
+    if not path.is_dir():
+        path = path.parent
     if not value:  # nothing to do
         return []
-    station_path = find_file_startswith(path.parent, "STATIONS")
+    station_path = find_file_startswith(path, "STATIONS")
     assert station_path.exists()
     stations = [Station2D.read_line(line) for line in iter_file_lines(station_path)]
     return stations
@@ -28,13 +33,13 @@ class Station2D(SpecsterModel):
         "station": 5,
         "network": 6,
         "xs": 21,
-        "xz": 21,
+        "zs": 21,
         "void1_": 10,
         "void2_": 12,
     }
     _decimal_precision = {
         "xs": 7,
-        "xz": 7,
+        "zs": 7,
         "void1_": 1,
         "void2_": 2,
     }
@@ -42,7 +47,7 @@ class Station2D(SpecsterModel):
     station: str = Field("001", description="station name")
     network: str = Field("UU", description="network name")
     xs: SpecFloat = Field(0.0, description="X location in meters")
-    xz: SpecFloat = Field(0.0, description="Z location in meters")
+    zs: SpecFloat = Field(0.0, description="Z location in meters")
     # TODO: See what these columns actually are
     void1_: SpecFloat = ""
     void2_: SpecFloat = ""

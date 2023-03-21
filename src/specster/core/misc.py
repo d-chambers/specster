@@ -2,6 +2,7 @@
 Misc small utilities.
 """
 import re
+import shutil
 from functools import cache
 from pathlib import Path
 from typing import Dict, Literal, Optional
@@ -132,6 +133,21 @@ def write_model_data(self, key: Optional[str] = None):
     return " ".join(param_list)
 
 
+def copy_directory_contents(old, new):
+    """
+    Copy all contents of old directory to new directory.
+    """
+    old, new = Path(old), Path(new)
+    assert old.exists() and old.is_dir()
+    for path in old.rglob("*"):
+        if path.is_dir():
+            continue
+        base = path.relative_to(old)
+        new_path = new / base
+        new_path.parent.mkdir(exist_ok=True, parents=True)
+        shutil.copy2(path, new_path)
+
+
 class SequenceDescriptor:
     """
     A descriptor for returning/setting nested values in par structure.
@@ -164,3 +180,20 @@ class SequenceDescriptor:
         setattr(base_attr, self._attributes[-1], value)
         for func in self.set_functions:
             func(instance, value)
+
+
+def grid(x, y, z, resX=100, resY=100):
+    """
+    Converts 3 column data to matplotlib grid
+    """
+    # Can be found in ./utils/Visualization/plot_kernel.py
+    from scipy.interpolate import griddata
+
+    xi = np.linspace(min(x), max(x), resX)
+    yi = np.linspace(min(y), max(y), resY)
+
+    # scipy version
+    Z = griddata((x, y), z, (xi[None, :], yi[:, None]), method="cubic")
+
+    X, Y = np.meshgrid(xi, yi)
+    return X, Y, Z

@@ -21,8 +21,9 @@ class BaseOutput(abc.ABC):
     stats: SpecsterModel
     _source_time_name = "plot_source_time_function.txt"
 
-    def __init__(self, path):
+    def __init__(self, path, control):
         self.path = Path(path)
+        self._control = control
 
     def get_waveforms(self) -> obspy.Stream:
         """Read all waveforms in the output."""

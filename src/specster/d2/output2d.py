@@ -1,17 +1,23 @@
 """
 Output for 2D simulations.
 """
+import operator
 import re
-from functools import cached_property
+from functools import cache, cached_property, reduce
 from pathlib import Path
-from typing import List, Literal, Optional, Self, Tuple
+from typing import Dict, List, Literal, Optional, Self, Tuple
 
+import numpy as np
 import pandas as pd
 from pydantic import Field
 
 from specster.core.misc import match_between
 from specster.core.models import SpecsterModel
 from specster.core.output import BaseOutput
+
+from .viz import plot_kernels, plot_single_kernel
+
+KERNEL_TYPES = Literal["rhop_alpha_beta", "rho_kappa_mu"]
 
 
 class GLLHistRow(SpecsterModel):
@@ -120,7 +126,7 @@ class SPECFEM2DStats(SpecsterModel):
         """Return a dict of specfem data."""
         out = dict(
             mpi_slices=match_between(txt, "total of", "slices"),
-            receiver_count=match_between(txt, "found", "receivers"),
+            receiver_count=match_between(txt, "found a total of", "receivers"),
             spec_duration=match_between(txt, "time of the system :", "s"),
             max_cfl=match_between(txt, r"must be below about 0.50 or so"),
             elements=match_between(txt, "number of elements:"),
@@ -173,8 +179,8 @@ class OutPut2D(BaseOutput):
 
     _required_files = ("xspecfem2D_stdout.txt",)
 
-    def __init__(self, path):
-        super().__init__(path)
+    def __init__(self, path, control):
+        super().__init__(path, control)
         self.stats = SPECFEM2DStats.parse_output_files(
             spec_path=self.path / "xspecfem2D_stdout.txt",
             mesh_path=self.path / "xmeshfem2D_stdout.txt",
@@ -200,19 +206,34 @@ class OutPut2D(BaseOutput):
         data = [x.dict() for x in self.stats.fluid_gll_hist]
         return pd.DataFrame(data)
 
-    def plot_geometry(self):
-        """Plot geometry associated with testcase."""
-        fig, ax = plt.subplots(1, 1)
-        sta = local.station_location
-        source = local.source_location
+    def load_event_kernels(
+        self,
+        kernel_type: KERNEL_TYPES = "rhop_alpha_beta",
+    ) -> Dict[str, pd.DataFrame]:
+        """Load kernels into a dict."""
+        out = {}
+        names = ["x", "z"] + list(kernel_type.split("_"))
+        glob = f"*{kernel_type}_kernel.dat"
+        for path in self.path.glob(glob):
+            name = path.name.split("_")[0]
+            out[name] = pd.read_csv(
+                path, delim_whitespace=True, names=names, header=None
+            )
+        return out
 
-        ax.scatter(
-            source[0], source[1], 1000, marker="*", color="black", edgecolor="white"
-        )
-        ax.scatter(sta[0], sta[1], 450, marker="v", color="black", edgecolor="white")
-        ax.set_xlim(*local.x_lims)
-        ax.set_ylim(*local.z_lims)
-        ax.set_xlabel("X (m)")
-        ax.set_ylabel("Y (m)")
-        ax.set_title("Model Geometry")
-        return fig
+    @cache
+    def load_kernel(
+        self,
+        kernel_type: KERNEL_TYPES = "rhop_alpha_beta",
+    ) -> pd.DataFrame:
+        """Load a kernel into memory."""
+        kernel_dict = self.load_event_kernels(kernel_type)
+        new = [x.set_index(["x", "z"]) for x in kernel_dict.values()]
+        combined = reduce(operator.add, new).reset_index()
+        # check that coords haven't changed
+        first_df = list(kernel_dict.values())[0]
+        assert np.all(combined[["x", "z"]].values == first_df[["x", "z"]])
+        return combined
+
+    plot_kernels = plot_kernels
+    plot_single_kernel = plot_single_kernel

@@ -133,7 +133,7 @@ def modified_control(tmp_path_factory):
     control.models = mods
     # Then remove all but 1 stations
     station = control.stations[0]
-    station.xs, station.xz = 2200, 2200
+    station.xs, station.zs = 2200, 2200
     control.stations = [station]
     # Then add a source
     new_source = control.sources[0].copy()

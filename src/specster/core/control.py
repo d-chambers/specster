@@ -9,9 +9,12 @@ from functools import cache
 from pathlib import Path
 from typing import Optional, Self
 
+import pandas as pd
+
 from specster.core.callout import run_command
 from specster.core.misc import (
     SequenceDescriptor,
+    copy_directory_contents,
     find_base_path,
     find_data_path,
     get_control_default_path,
@@ -21,6 +24,8 @@ from specster.core.models import SpecsterModel
 from specster.core.output import BaseOutput
 from specster.core.printer import console, program_render
 from specster.core.stations import _maybe_use_station_file
+from specster.core.waveforms import write_ascii_waveforms
+from specster.exceptions import SpecFEMError
 
 
 class BaseControl:
@@ -96,6 +101,14 @@ class BaseControl:
     def run(self, output_path=None) -> BaseOutput:
         """Run the simulation, optionally copy the output folder."""
 
+    @abc.abstractmethod
+    def get_source_df(self) -> pd.DataFrame:
+        """Get a dataframe of sources."""
+
+    @abc.abstractmethod
+    def get_station_df(self) -> pd.DataFrame:
+        """Get a dataframe of stations."""
+
     # --- General methods
 
     def copy(self, path: Optional[Path] = None) -> Self:
@@ -113,6 +126,7 @@ class BaseControl:
         new._writen = False
         new._read_only = False
         new.base_path = path
+        copy_directory_contents(self.base_path, new.base_path)
         return new
 
     def write(self, path: Optional[Path] = None, overwrite: bool = False) -> Self:
@@ -202,7 +216,7 @@ class BaseControl:
                 f"{self.base_path} with binary {bin}",
             )
             if not self._writen:
-                self.write()
+                self.write(overwrite=True)
                 self._writen = True
             self.ensure_output_path_exists()
             out = run_command(str(bin), cwd=self.base_path, console=console)
@@ -210,6 +224,9 @@ class BaseControl:
         # write ouput
         self._write_output_file(out["stdout"], f"{command}_stdout.txt", console)
         self._write_output_file(out["stderr"], f"{command}_stderr.txt", console)
+        # raise error if std error is not None
+        if out["stderr"]:
+            raise SpecFEMError(out["stderr"])
         return out
 
     def _copy_inputs_to_outputs(self):
@@ -233,22 +250,32 @@ class BaseControl:
             return False
         return self.par == other.par
 
-    def prepare_fwi_forward(self):
+    def prepare_fwi_forward(self) -> Self:
         """
         Prepare control structure for forward simulation in FWI workflow.
         """
         self.par.simulation_type = "1"
         self.par.save_forward = True
-        self.par.save_model = "binary"
+        self.par.mesh.save_model = "binary"
         self._writen = False  # ensure run will rewrite files.
+        return self
 
-    def prepare_fwi_adjoint(self):
+    def prepare_fwi_adjoint(self) -> Self:
         """
         Prepare control structure for adjoint part of fwi.
         """
         self.par.simulation_type = "3"
         self.par.save_forward = False
         self._writen = False
+        return self
 
-    def write_adjoint_sources(self, st):
+    def write_adjoint_sources(self, st) -> Self:
         """Write the adjoint sources in stream to directory."""
+        out_path = self.base_path / "SEM"  # path to save traces.
+        out_path.mkdir(exist_ok=True, parents=True)
+        for tr in st:
+            stats = tr.stats
+            name = f"{stats.network}.{stats.station}.{stats.channel}.adj"
+            new_path = out_path / name
+            write_ascii_waveforms(tr, new_path)
+        return self

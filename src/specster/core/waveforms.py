@@ -59,6 +59,6 @@ def write_ascii_waveforms(tr, filename):
     Uses b value as the beginning.
     """
     data = np.zeros((len(tr.data), 2))
-    data[:, 0] = tr.times() + tr.stats.b
+    data[:, 0] = tr.times() + tr.stats.starttime.timestamp
     data[:, 1] = tr.data
     np.savetxt(filename, data)
