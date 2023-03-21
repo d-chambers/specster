@@ -232,3 +232,23 @@ class BaseControl:
         if not isinstance(other, BaseControl):
             return False
         return self.par == other.par
+
+    def prepare_fwi_forward(self):
+        """
+        Prepare control structure for forward simulation in FWI workflow.
+        """
+        self.par.simulation_type = "1"
+        self.par.save_forward = True
+        self.par.save_model = "binary"
+        self._writen = False  # ensure run will rewrite files.
+
+    def prepare_fwi_adjoint(self):
+        """
+        Prepare control structure for adjoint part of fwi.
+        """
+        self.par.simulation_type = "3"
+        self.par.save_forward = False
+        self._writen = False
+
+    def write_adjoint_sources(self, st):
+        """Write the adjoint sources in stream to directory."""

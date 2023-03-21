@@ -4,7 +4,7 @@ Output for 2D simulations.
 import re
 from functools import cached_property
 from pathlib import Path
-from typing import List, Literal, Optional, Self
+from typing import List, Literal, Optional, Self, Tuple
 
 import pandas as pd
 from pydantic import Field
@@ -78,6 +78,12 @@ class SPECFEM2DStats(SpecsterModel):
     fluid_gll_hist: List[GLLHistRow] = Field(
         description="histogram of min points per P wavelength in fluid regions"
     )
+    x_lims: Optional[Tuple[float, float]] = Field(
+        default=None, description="min and max value along x dimension."
+    )
+    z_lims: Optional[Tuple[float, float]] = Field(
+        default=None, description="min and max values along z dimension."
+    )
 
     @classmethod
     def parse_output_files(cls, spec_path, mesh_path=None) -> Self:
@@ -86,8 +92,28 @@ class SPECFEM2DStats(SpecsterModel):
         # replace parens because I suck at regex
         spec_text = spath.read_text().replace(")", "").replace("(", "")
         spec_dict = cls._get_spec_data(spec_text)
+        if mesh_path and Path(mesh_path).exists():
+            mpath = Path(mesh_path)
+            mtext = mpath.read_text().replace(")", "").replace("(", "")
+            spec_dict.update(cls._get_mesh_dict(mtext))
         # TODO parse mesher outputs
         return cls(**spec_dict)
+
+    @classmethod
+    def _get_mesh_dict(cls, text):
+        """Get the mesh dict params."""
+        out = dict(
+            x_lims=cls._get_minmax(text, "X"),
+            z_lims=cls._get_minmax(text, "Z"),
+        )
+        return out
+
+    @classmethod
+    def _get_minmax(cls, text, comp):
+        """Get the min/max components."""
+        start = f"Min and max value of {comp} in the grid ="
+        vals = match_between(text, start).split()
+        return vals
 
     @classmethod
     def _get_spec_data(cls, txt):
@@ -140,10 +166,6 @@ class SPECFEM2DStats(SpecsterModel):
         return [GLLHistRow.from_args(x) for x in lines]
 
 
-def parse_xspec2d_stdout(path):
-    """Parse the output of xspec2d"""
-
-
 class OutPut2D(BaseOutput):
     """
     Output object for 2D simulations.
@@ -177,3 +199,20 @@ class OutPut2D(BaseOutput):
         """Return a dataframe of the liquid hist"""
         data = [x.dict() for x in self.stats.fluid_gll_hist]
         return pd.DataFrame(data)
+
+    def plot_geometry(self):
+        """Plot geometry associated with testcase."""
+        fig, ax = plt.subplots(1, 1)
+        sta = local.station_location
+        source = local.source_location
+
+        ax.scatter(
+            source[0], source[1], 1000, marker="*", color="black", edgecolor="white"
+        )
+        ax.scatter(sta[0], sta[1], 450, marker="v", color="black", edgecolor="white")
+        ax.set_xlim(*local.x_lims)
+        ax.set_ylim(*local.z_lims)
+        ax.set_xlabel("X (m)")
+        ax.set_ylabel("Y (m)")
+        ax.set_title("Model Geometry")
+        return fig

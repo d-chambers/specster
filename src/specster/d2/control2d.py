@@ -7,6 +7,8 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
+import matplotlib.pyplot as plt
+
 import specster
 
 from ..core.control import BaseControl
@@ -59,6 +61,13 @@ class Control2d(BaseControl):
             output_path.parent.mkdir(exist_ok=True, parents=True)
             shutil.copytree(default_output, output_path)
         return OutPut2D(output_path or default_output)
+
+    def prepare_fwi_forward(self):
+        """Prepare for forward run in FWI."""
+        super().prepare_fwi_forward()
+        # Not sure why but other examples set number of control els to 9;
+        # just follow suit here. May need to change for 3D.
+        self.par.ngnod = 9
 
     def xmeshfem2d(self):
         """Run the 2D mesher."""

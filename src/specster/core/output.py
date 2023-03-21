@@ -7,7 +7,7 @@ from pathlib import Path
 import obspy
 
 from specster.core.models import SpecsterModel
-from specster.core.waveforms import read_ascii_stream
+from specster.core.waveforms import read_ascii_stream, read_generic_trace
 
 
 class BaseOutput(abc.ABC):
@@ -19,6 +19,7 @@ class BaseOutput(abc.ABC):
     _required_files = ()
     _optional_files = ()
     stats: SpecsterModel
+    _source_time_name = "plot_source_time_function.txt"
 
     def __init__(self, path):
         self.path = Path(path)
@@ -26,6 +27,12 @@ class BaseOutput(abc.ABC):
     def get_waveforms(self) -> obspy.Stream:
         """Read all waveforms in the output."""
         return read_ascii_stream(self.path)
+
+    def get_source_time_function(self) -> obspy.Stream:
+        """Return the source time function as a stream."""
+        path = self.path / self._source_time_name
+        tr = read_generic_trace(path)
+        return obspy.Stream([tr])
 
     def validate(self):
         """Run all validators (start with _validate)"""
