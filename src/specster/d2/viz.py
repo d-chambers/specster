@@ -33,7 +33,14 @@ def plot_kernels(
     return fig, axes
 
 
-def plot_single_kernel(output: "specster.OutPut2D", df, column, ax=None, scale=0.25):
+def plot_single_kernel(
+    output: "specster.OutPut2D",
+    df,
+    column,
+    ax=None,
+    scale=0.25,
+    max_stations=10,
+):
     """Plot Rho, Alpha, Beta"""
     data = df[column]
     abs_max_val = np.abs(data).max()
@@ -59,7 +66,7 @@ def plot_single_kernel(output: "specster.OutPut2D", df, column, ax=None, scale=0
     station_df = output._control.get_station_df()
     if not source_df.empty:
         ax.scatter(source_df["xs"], source_df["zs"], 1000, marker="*", **kwargs)
-    if not station_df.empty:
+    if not station_df.empty and len(station_df) < max_stations:
         ax.scatter(station_df["xs"], station_df["zs"], 600, marker="^", **kwargs)
     plt.colorbar(im, ax=ax)
     ax.tick_params(axis="both", which="major", labelsize=14)

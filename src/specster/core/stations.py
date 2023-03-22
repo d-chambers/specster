@@ -49,8 +49,8 @@ class Station2D(SpecsterModel):
     xs: SpecFloat = Field(0.0, description="X location in meters")
     zs: SpecFloat = Field(0.0, description="Z location in meters")
     # TODO: See what these columns actually are
-    void1_: SpecFloat = ""
-    void2_: SpecFloat = ""
+    void1_: SpecFloat = 0.0
+    void2_: SpecFloat = 0.0
 
     def write_model_data(self, key=None):
         """Write the model data to disk."""
