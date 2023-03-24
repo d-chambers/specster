@@ -56,6 +56,7 @@ def plot_single_kernel(
 
     # plot, set labels etc.
     im = ax.imshow(data, extent=extent, cmap="seismic_r", vmin=min_val, vmax=max_val)
+
     ax.set_xlabel("X (m)")
     ax.set_ylabel("Z (m)")
     ax.set_title(f"{column.title()} Kernel")

@@ -2,7 +2,9 @@
 A module for controlling the output of simulations.
 """
 import abc
+from contextlib import suppress
 from pathlib import Path
+from typing import Dict, Tuple
 
 import obspy
 
@@ -41,6 +43,15 @@ class BaseOutput(abc.ABC):
         for method_name in method_names:
             getattr(self, method_name)()
         return self
+
+    @property
+    def lims(self) -> Dict[str, Tuple[float, float]]:
+        """Return a dataframe of the liquid hist"""
+        out = {}
+        for char in "xyz":
+            with suppress(AttributeError):
+                out[char] = getattr(self.stats, f"{char}_lims")
+        return out
 
     def _check_required_files_exist(self):
         """Ensure required files exist."""
