@@ -47,7 +47,7 @@ def find_base_path(path):
     return path
 
 
-def match_between(text, start, end="$"):
+def match_between(text, start, end="$", default=None):
     """
     Scan through text and find text between start/end string.
 
@@ -63,7 +63,9 @@ def match_between(text, start, end="$"):
 
     regex = f"{start}(.*?){end}"
     out = re.search(regex, text, re.MULTILINE)
-    assert out is not None, f"{regex} return nothing!"
+    if out is None and default is not None:
+        return default
+    assert out is not None, 'Match returned nothing!'
     return out.group(1).replace("=", "").strip()
 
 

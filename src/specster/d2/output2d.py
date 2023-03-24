@@ -125,7 +125,7 @@ class SPECFEM2DStats(SpecsterModel):
     def _get_spec_data(cls, txt):
         """Return a dict of specfem data."""
         out = dict(
-            mpi_slices=match_between(txt, "total of", "slices"),
+            mpi_slices=match_between(txt, "total of", "slices", 1),
             receiver_count=match_between(txt, "found a total of", "receivers"),
             spec_duration=match_between(txt, "time of the system :", "s"),
             max_cfl=match_between(txt, r"must be below about 0.50 or so"),

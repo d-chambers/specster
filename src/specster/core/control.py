@@ -151,7 +151,7 @@ class BaseControl:
             self = self.copy(path)  # NOQA
         templates = load_templates_from_directory(self._template_path)
         paths = self.get_input_paths()
-        assert set(paths).issubset(set(templates))
+        assert set(set(templates)).issubset(paths)
         disp = self.par.disp
         for name, template in templates.items():
             path = paths[name]
