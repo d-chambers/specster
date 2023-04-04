@@ -21,7 +21,7 @@ class SpecsterModel(BaseModel):
     def read_line(cls, params):
         """Read params from a sequence into pydantic model."""
         if isinstance(params, str):
-            params = params.split()
+            params = params.split("#")[0].split()
         field_names = list(cls.__fields__)
         assert len(params) == len(field_names), "names should match args"
         input_dict = {i: v for i, v in zip(field_names, params)}

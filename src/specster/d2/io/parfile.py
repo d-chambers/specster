@@ -35,7 +35,7 @@ class AbstractMaterialModelType(SpecsterModel):
     @classmethod
     def read_line(cls, line):
         """Read lines to create class instance."""
-        params = line.split()
+        params = line.split("#")[0].split()
         model_typ = cls.__fields__["model_type"].default
         assert params[1] == model_typ, "Wrong model type!"
         # need to strip out model type, if we got here its already handled.
@@ -592,12 +592,50 @@ class ExternalMeshing(AbstractParameterModel):
     )
 
 
+class Interfaces(SpecsterModel):
+    """Interfaces for the internal meshing."""
+
+    layers: List[List[tuple[float, float]]]
+    z_elements: List[int]
+
+    @property
+    def interface_count(self) -> int:
+        """return the number of interfaces."""
+        return len(self.layers)
+
+    @staticmethod
+    def read_interfaces(value, path, state, **kwargs):
+        """Read the sources"""
+        if state.get("read_external_mesh", False):
+            return Interfaces(layers=[[]], z_elements=[])
+        layers = []
+        z_elements = []
+        interfaces_path = path.parent / value
+        assert interfaces_path.exists()
+        # read number of interfaces
+        lines = (x.strip() for x in iter_file_lines(interfaces_path))
+        number_of_interfaces = int(next(lines))
+        # parse each interface
+        for _ in range(number_of_interfaces):
+            point_list = []
+            num_points = int(next(lines))
+            for _ in range(num_points):
+                point_tup = tuple(float(x) for x in next(lines).split())
+                point_list.append(point_tup)
+            layers.append(point_list)
+        # read the number of elements
+        for num_elements in lines:
+            z_elements.append(int(num_elements))
+        return Interfaces(layers=layers, z_elements=z_elements)
+
+
 class InternalMeshing(AbstractParameterModel):
     """Controls the internal meshing parameters."""
 
     interfacesfile: Optional[Path] = Field(
         "./DATA/interfaces.dat", description="File with interfaces"
     )
+    interfaces: Interfaces
     xmin: SpecFloat = Field(0.0, description="abscissa of left side of the model")
     xmax: SpecFloat = Field(4000, description="abscissa of the right side of model")
     nx: int = Field(80, description="number of elements along X")
@@ -800,6 +838,7 @@ _SPECIAL_KEYS = {
     "nreceiversets": (ReceiverSets.read_receiver_sets, "receiver_sets"),
     "nsources": (Sources.read_sources, "sources"),
     "use_existing_stations": (read_stations, "stations"),
+    "interfacesfile": (Interfaces.read_interfaces, "interfaces"),
 }
 
 

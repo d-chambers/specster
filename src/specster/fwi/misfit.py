@@ -183,7 +183,9 @@ class TravelTimeMisFit(_BaseMisFit):
             double_t_diff = tr_synth.copy().differentiate().differentiate()
             norm = double_t_diff.data * tr_synth.data
             norm_sum = simps(norm, dx=dt)
+            print(norm_sum)
             out[tr_synth.id] = norm_sum
+
         return out
 
     @cache
