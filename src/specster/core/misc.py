@@ -1,6 +1,7 @@
 """
 Misc small utilities.
 """
+import os
 import re
 import shutil
 from functools import cache
@@ -199,3 +200,46 @@ def grid(x, y, z, resX=100, resY=100):
 
     X, Y = np.meshgrid(xi, yi)
     return X, Y, Z
+
+
+def read_fortran_binary(filename):
+    """
+    Reads Fortran-style unformatted binary data into numpy array.
+    .. note::
+        The FORTRAN runtime system embeds the record boundaries in the data by
+        inserting an INTEGER*4 byte count at the beginning and end of each
+        unformatted sequential record during an unformatted sequential WRITE.
+        see: https://docs.oracle.com/cd/E19957-01/805-4939/6j4m0vnc4/index.html
+    """
+    nbytes = os.path.getsize(filename)
+    with open(filename, "rb") as file:
+        # read size of record
+        file.seek(0)
+        n = np.fromfile(file, dtype="int32", count=1)[0]
+
+        if n == nbytes - 8:
+            file.seek(4)
+            data = np.fromfile(file, dtype="float32")
+            return data[:-1]
+        else:
+            file.seek(0)
+            data = np.fromfile(file, dtype="float32")
+            return data
+
+
+def write_fortran_binary(arr, filename):
+    """
+    Writes Fortran style binary files. Data are written as single precision
+    floating point numbers.
+    .. note::
+        FORTRAN unformatted binaries are bounded by an INT*4 byte count. This
+        function mimics that behavior by tacking on the boundary data.
+        https://docs.oracle.com/cd/E19957-01/805-4939/6j4m0vnc4/index.html
+    """
+    buffer = np.array([4 * len(arr)], dtype="int32")
+    data = np.array(arr, dtype="float32")
+
+    with open(filename, "wb") as file:
+        buffer.tofile(file)
+        data.tofile(file)
+        buffer.tofile(file)

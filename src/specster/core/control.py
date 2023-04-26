@@ -98,6 +98,14 @@ class BaseControl:
         """Return an output object for working with simulation output."""
 
     @abc.abstractmethod
+    def get_material_model_df(self) -> pd.DataFrame:
+        """Return the material model used in the simulation."""
+
+    @abc.abstractmethod
+    def set_material_model_df(self) -> pd.DataFrame:
+        """Return the material model used in the simulation."""
+
+    @abc.abstractmethod
     def run(self, output_path=None) -> BaseOutput:
         """Run the simulation, optionally copy the output folder."""
 

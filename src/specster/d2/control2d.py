@@ -101,6 +101,13 @@ class Control2d(BaseControl):
         data = [x.dict() for x in self._read_stations()]
         return pd.DataFrame(data)
 
+    def get_material_model_df(self) -> pd.DataFrame:
+        """Return the material model used in the simulation."""
+        # expected_files = [f"proc*{x}" for x in {"rho", "vp", "vs", "x", "z"}]
+
+    def set_material_model_df(self) -> pd.DataFrame:
+        """Return the material model used in the simulation."""
+
 
 def load_2d_example(name, new_path=None) -> Control2d:
     """
