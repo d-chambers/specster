@@ -195,13 +195,13 @@ record_at_surface_same_vertical = {{ receiver_set.disp.record_at_surface_same_ve
 #-----------------------------------------------------------
 
 # save sensitivity kernels in ASCII format (much bigger files, but compatible with current GMT scripts) or in binary format
-save_ASCII_kernels              = {{ dis.adjoint_kernel.save_ASCII_kernels }}
+save_ASCII_kernels              = {{ dis.adjoint_kernel.save_ascii_kernels }}
 
 # since the accuracy of kernel integration may not need to respect the CFL, this option permits to save computing time, and memory with UNDO_ATTENUATION_AND_OR_PML mode
-NTSTEP_BETWEEN_COMPUTE_KERNELS  = {{ dis.adjoint_kernel.NTSTEP_BETWEEN_COMPUTE_KERNELS }}
+NTSTEP_BETWEEN_COMPUTE_KERNELS  = {{ dis.adjoint_kernel.ntstep_between_compute_kernels }}
 
 # outputs approximate Hessian for preconditioning
-APPROXIMATE_HESS_KL             = {{ dis.adjoint_kernel.APPROXIMATE_HESS_KL }}
+APPROXIMATE_HESS_KL             = {{ dis.adjoint_kernel.approximate_hess_kl }}
 
 #-----------------------------------------------------------
 #
@@ -211,24 +211,24 @@ APPROXIMATE_HESS_KL             = {{ dis.adjoint_kernel.APPROXIMATE_HESS_KL }}
 
 # Perfectly Matched Layer (PML) boundaries
 # absorbing boundary active or not
-PML_BOUNDARY_CONDITIONS         = {{ dis.boundary_conditions.PML_BOUNDARY_CONDITIONS }}
-NELEM_PML_THICKNESS             = {{ dis.boundary_conditions.NELEM_PML_THICKNESS }}
-ROTATE_PML_ACTIVATE             = {{ dis.boundary_conditions.ROTATE_PML_ACTIVATE }}
-ROTATE_PML_ANGLE                = {{ dis.boundary_conditions.ROTATE_PML_ANGLE }}
+PML_BOUNDARY_CONDITIONS         = {{ dis.boundary_conditions.pml_boundary_conditions }}
+NELEM_PML_THICKNESS             = {{ dis.boundary_conditions.nelem_pml_thickness }}
+ROTATE_PML_ACTIVATE             = {{ dis.boundary_conditions.rotate_pml_activate }}
+ROTATE_PML_ANGLE                = {{ dis.boundary_conditions.rotate_pml_angle }}
 
 # change the four parameters below only if you know what you are doing; they change the damping profiles inside the PMLs
-K_MIN_PML                       = {{ dis.boundary_conditions.K_MIN_PML }}          # from Gedney page 8.11
-K_MAX_PML                       = {{ dis.boundary_conditions.K_MAX_PML }}
+K_MIN_PML                       = {{ dis.boundary_conditions.k_min_pml }}          # from Gedney page 8.11
+K_MAX_PML                       = {{ dis.boundary_conditions.k_max_pml }}
 damping_change_factor_acoustic  = {{ dis.boundary_conditions.damping_change_factor_acoustic }}
 damping_change_factor_elastic   = {{ dis.boundary_conditions.damping_change_factor_elastic }}
 
 # set the parameter below to .false. unless you know what you are doing; this implements automatic adjustment of the PML parameters for elongated models.
 # The goal is to improve the absorbing efficiency of PML for waves with large incidence angles, but this can lead to artefacts.
 # In particular, this option is efficient only when the number of sources NSOURCES is equal to one.
-PML_PARAMETER_ADJUSTMENT        = {{ dis.boundary_conditions.PML_PARAMETER_ADJUSTMENT }}
+PML_PARAMETER_ADJUSTMENT        = {{ dis.boundary_conditions.pml_parameter_adjustment }}
 
 # Stacey ABC
-STACEY_ABSORBING_CONDITIONS     = {{ dis.boundary_conditions.STACEY_ABSORBING_CONDITIONS }}
+STACEY_ABSORBING_CONDITIONS     = {{ dis.boundary_conditions.stacey_absorbing_conditions }}
 
 # periodic boundaries
 ADD_PERIODIC_CONDITIONS         = {{ dis.boundary_conditions.ADD_PERIODIC_CONDITIONS }}

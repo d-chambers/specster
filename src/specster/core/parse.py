@@ -54,6 +54,8 @@ def read_binaries_in_directory(path) -> pd.DataFrame:
         out[proc][field_name] = array
 
     dfs = [pd.DataFrame(v).assign(proc=i) for i, v in out.items()]
+    if not dfs:
+        return pd.DataFrame()
     total_df = pd.concat(dfs)
     return total_df[sorted(total_df.columns)]
 

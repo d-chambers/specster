@@ -86,7 +86,13 @@ class Control2d(BaseControl):
         return OutPut2D(output_path or default_output, self)
 
     def run_each_source(self) -> Self:
-        """Run the simulation separately for each source."""
+        """
+        Run the simulation separately for each source.
+
+        This is done to prepare for an FWI workflow, and as such,
+        some parameters will be set.
+        """
+        self._prep_many_source_run()
         sources = self.par.sources.sources
         path = self._each_source_path
         client = ProcessPoolExecutor()
@@ -126,6 +132,28 @@ class Control2d(BaseControl):
         """
         assert self._stations_path.exists(), "no stations to read!"
         return read_stations(True, self._stations_path)
+
+    def _prep_many_source_run(self):
+        """
+        Makes sure the model is ready for a many-source run.
+
+        Effectively, we need the binary models to be produce and subsequent
+        models to read the material models from binaries so they can be
+        updated.
+        """
+        if len(read_binaries_in_directory(self._data_path)):
+            return self
+        self.prepare_fwi_forward()
+        # since we just need the material models no need run whole thing.
+        nstep_old = self.par.nstep
+        self.par.nstep = 10  # we just need the velocity model to
+        self.write()
+        self.run()  # should be fast
+        # reset
+        self.par.nstep = nstep_old
+        self.write()
+        self.clear_outputs()
+        return self
 
     def get_source_df(self):
         """Get a dataframe of sources."""

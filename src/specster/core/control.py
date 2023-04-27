@@ -291,8 +291,11 @@ class BaseControl:
         Prepare control structure for forward simulation in FWI workflow.
         """
         self.par.simulation_type = "1"
+        self.setup_with_binary_database = "1"
         self.par.save_forward = True
         self.par.mesh.save_model = "binary"
+        self.par.mesh.model = "default"
+        self.par.adjoint_kernel.approximate_hess_kl = True
         self._writen = False  # ensure run will rewrite files.
         return self
 
@@ -300,8 +303,11 @@ class BaseControl:
         """
         Prepare control structure for adjoint part of fwi.
         """
+        self.setup_with_binary_database = "2"
         self.par.simulation_type = "3"
         self.par.save_forward = False
+        self.par.mesh.model = "binary"
+        self.par.mesh.save_model = "default"
         self._writen = False
         return self
 

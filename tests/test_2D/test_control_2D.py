@@ -67,6 +67,21 @@ class TestLoad2DExamples:
         assert isinstance(control, sp.Control2d)
 
 
+class TestMisc:
+    """Misc tests."""
+
+    def test_save_hessian(self, control_2d_default, tmp_path_factory):
+        """For some reason the hessian parameters wasn't saving."""
+        path = tmp_path_factory.mktemp("test_hessian_save")
+        control = control_2d_default.copy(path)
+        assert not control.par.adjoint_kernel.approximate_hess_kl
+        control.par.adjoint_kernel.approximate_hess_kl = True
+        control.write(overwrite=True)
+        control2 = sp.Control2d(path)
+        assert control.par.adjoint_kernel.approximate_hess_kl
+        assert control2.par.adjoint_kernel.approximate_hess_kl
+
+
 @pytest.mark.e2e
 @pytest.mark.slow
 class TestEnd2End:

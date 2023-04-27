@@ -157,6 +157,9 @@ def control_2d_default_3_sources(control_2d_default, tmp_path_factory):
     cache_name = "control_2d_default_3_sources"
     if not load_cache(cache_name):
         control = control_2d_default.copy(tmp_path_factory.mktemp("3source"))
+        # there are some issues with visco elastic models; just
+        # set the value to a small vs
+        control.models[1].Vs = control.models[1].Vp / 2
         sources = control.sources
         new1 = copy.deepcopy(sources[0])
         new1.xs = 1000
@@ -165,7 +168,10 @@ def control_2d_default_3_sources(control_2d_default, tmp_path_factory):
         new2.xs = 2000
         new2.zs = 2000
         control.sources += [new1, new2]
+        # ps images are huge; don't do them.
+        control.par.visualizations.postscript.output_postscript_snapshot = False
         control.run_each_source()
+
         cache_file_or_dir(control.base_path, cache_name)
     else:
         control = specster.Control2d(load_cache(cache_name))

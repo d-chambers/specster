@@ -2,9 +2,10 @@
 Class for inverting material properties.
 """
 import shutil
-from typing import Optional, Literal, Type, Union
+from typing import Optional, Literal, Type, Union, List
 from pathlib import Path
 from functools import cache
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 
@@ -32,6 +33,14 @@ def _get_streams_from_each_source_dir(path):
     return [read_ascii_stream(x) for x in sorted_dirs]
 
 
+def _run_controls(control: sp.Control2d):
+    """helper function for mapping control run over many processes."""
+    control.write()
+    control.run()
+    return control.base_path
+
+
+
 class Inverter:
     """
     Class for running inversions.
@@ -43,6 +52,7 @@ class Inverter:
         Should contain directories named after sources (sequential)
         then each of these waveforms in the convention semp format.
     """
+    _observed_path = "OBSERVED_STREAMS"
 
     def __init__(
             self,
@@ -59,20 +69,20 @@ class Inverter:
         # set input params
         if isinstance(observed_data_path, BaseControl):
             observed_data_path = observed_data_path.each_source_path
-        self._initial_control = _run_each_source(initial_control)
+
         self._misfit = misfit
         self._true_control = true_control
         self._optimization = optimization
         self._stream_pre_process = stream_pre_processing
         self.working_path = Path(working_path)
+        new_control = initial_control.copy(self.working_path)
+        self._initial_control = _run_each_source(new_control)
         self._create_working_directory(observed_data_path)
 
     def _create_working_directory(self, observed_data_path):
         """Create a working directory with observed/synthetic data."""
-        # copy control
-        control = self._initial_control.copy(self.working_path)
         # copy observed data
-        obs_data_path = self.working_path / "observed_streams"
+        obs_data_path = self.working_path / self._observed_path
         if not obs_data_path.is_dir():
             shutil.copytree(observed_data_path, obs_data_path)
 
@@ -86,6 +96,14 @@ class Inverter:
             for x in self._initial_control.each_source_output
         ]
         misfit, adjoints = self._calc_misfit_adjoints(initial_streams)
+        sub_controls = self.get_controls()
+        for control, adjoint in zip(sub_controls, adjoints):
+            control.prepare_fwi_adjoint().write_adjoint_sources(adjoint)
+
+        breakpoint()
+        pp = ProcessPoolExecutor()
+
+        out = pp.map(_run_controls, sub_controls)
         #
         # if not len(initial_st):  # need to run initial control
         #     self.initial_control.run()
@@ -94,6 +112,17 @@ class Inverter:
         #
         # initial_misfit = self._calc_misfit_adjoints(current_st_list=initial_st)
         return self
+
+
+    def _save_adjoints(self, adjoints):
+        """Save adjoints back to disk."""
+
+    def get_controls(self) -> List[sp.Control2d]:
+        """Get a control2d for each event."""
+        out = []
+        for path in sorted(self._initial_control.each_source_path.iterdir()):
+            out.append(sp.Control2d(path))
+        return out
 
     def _calc_misfit_adjoints(self, current_st_list):
         """Calculate the misfit and adjoints."""
@@ -119,7 +148,7 @@ class Inverter:
         st_obs_list = [
             self._preprocess_stream(x) for x in
             _get_streams_from_each_source_dir(
-                self.working_path / "observed_streams"
+                self.working_path / self._observed_path
             )
         ]
         return st_obs_list

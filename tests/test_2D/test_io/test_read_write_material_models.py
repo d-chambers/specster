@@ -15,7 +15,7 @@ def control_with_datafiles(control_2d_default, tmp_path_factory) -> specster.Con
     # set generate material models to true
     new.par.mesh.setup_with_binary_database = "0"
     new.par.mesh.save_model = "binary"
-    new.write()
+    new.write(overwrite=True)
     new.run()
     return new
 
@@ -28,7 +28,7 @@ def control_with_datafiles(control_2d_default, tmp_path_factory) -> specster.Con
     # set generate material models to true
     new.par.mesh.setup_with_binary_database = "0"
     new.par.mesh.save_model = "binary"
-    new.write()
+    new.write(overwrite=True)
     new.run()
     return new
 

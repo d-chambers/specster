@@ -227,6 +227,7 @@ class OutPut2D(BaseOutput):
         kernel_type: KERNEL_TYPES = "rhop_alpha_beta",
     ) -> pd.DataFrame:
         """Load a kernel into memory."""
+
         kernel_dict = self.load_event_kernels(kernel_type)
         new = [x.set_index(["x", "z"]) for x in kernel_dict.values()]
         combined = reduce(operator.add, new).reset_index()
