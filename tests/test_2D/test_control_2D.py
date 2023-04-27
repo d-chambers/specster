@@ -1,6 +1,8 @@
 """
 Tests for control class.
 """
+from pathlib import Path
+import copy
 
 import pytest
 
@@ -76,5 +78,23 @@ class TestEnd2End:
         output = modified_control_ran.output
         assert output.path.exists()
 
-    # @pytest.mark.slow
-    # def
+
+@pytest.mark.e2e
+@pytest.mark.slow
+class TestParallelEnd2End:
+    """Various end-to-end tests."""
+
+    def test_control_3_sources(self, control_2d_default_3_sources):
+        """Ensure the expected directories were created and have waveforms."""
+        control = control_2d_default_3_sources
+        expected = Path(control.base_path / control._each_source_path)
+        assert expected.exists() and expected.is_dir()
+        sub_dirs = [x for x in expected.iterdir()]
+        assert len(sub_dirs) == 3
+        assert [int(x.name) for x in sorted(sub_dirs)] == [0, 1, 2]
+
+    def test_each_source_output(self, control_2d_default_3_sources):
+        """Ensure a list of output objects can be returned."""
+        control = control_2d_default_3_sources
+        out = control_2d_default_3_sources.each_source_output
+        assert all([isinstance(x, sp.OutPut2D) for x in out])

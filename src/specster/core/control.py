@@ -24,7 +24,7 @@ from specster.core.models import SpecsterModel
 from specster.core.output import BaseOutput
 from specster.core.printer import console, program_render
 from specster.core.stations import _maybe_use_station_file
-from specster.core.waveforms import write_ascii_waveforms
+from specster.core.parse import write_ascii_waveforms
 from specster.exceptions import SpecFEMError
 
 
@@ -38,6 +38,7 @@ class BaseControl:
     _template_path = None
     _spec_parameters = SpecsterModel
     _control_type: Optional[str] = None
+    _each_source_path = "EACH_SOURCE"
 
     sources = SequenceDescriptor("par.sources.sources")
     models = SequenceDescriptor("par.material_models.models")
@@ -110,6 +111,10 @@ class BaseControl:
         """Run the simulation, optionally copy the output folder."""
 
     @abc.abstractmethod
+    def run_each_source(self) -> BaseOutput:
+        """Run the simulation separately for each source."""
+
+    @abc.abstractmethod
     def get_source_df(self) -> pd.DataFrame:
         """Get a dataframe of sources."""
 
@@ -119,7 +124,7 @@ class BaseControl:
 
     # --- General methods
 
-    def copy(self, path: Optional[Path] = None) -> Self:
+    def copy(self, path: Optional[Path] = None, exclude=None) -> Self:
         """Copy control2D and specify a new path.
 
         Parameters
@@ -127,6 +132,8 @@ class BaseControl:
         Path
             The Path to a new directory. If None, use a temp
             directory.
+        exclude
+            List of directories of files to exclude.
         """
         path = path or Path(tempfile.TemporaryDirectory().name)
         assert not path.is_file(), "must pass a directory."
@@ -134,7 +141,11 @@ class BaseControl:
         new._writen = False
         new._read_only = False
         new.base_path = path
-        copy_directory_contents(self.base_path, new.base_path)
+        copy_directory_contents(
+            self.base_path,
+            new.base_path,
+            exclude=exclude,
+        )
         return new
 
     def write(self, path: Optional[Path] = None, overwrite: bool = False) -> Self:
@@ -191,9 +202,26 @@ class BaseControl:
         return self.output_path
 
     @property
-    def output_path(self):
+    def output_path(self) -> Path:
         """Get the output directory path, create it if it isn't there."""
         return self.base_path / "OUTPUT_FILES"
+
+    @property
+    def each_source_path(self) -> Path:
+        """
+        Get the directory to where a copy of the control for each source was
+        created.
+        """
+        return self.base_path / self._each_source_path
+
+    def clear_each_source_path(self):
+        """
+        Get the directory to where a copy of the control for each source was
+        created.
+        """
+        path = self.base_path / self._each_source_path
+        if path.exists():
+            shutil.rmtree(path)
 
     def clear_outputs(self):
         """Remove output directory."""
@@ -213,10 +241,10 @@ class BaseControl:
             if console:
                 console.print(f"writing {out_path}")
 
-    def _run_spec_command(self, command: str, bin_path):
+    def _run_spec_command(self, command: str, bin_path, supress=False):
         """Run a specfem command."""
 
-        with program_render(console, title=command):
+        with program_render(console, title=command, supress_output=supress):
             bin = bin_path / command
             assert bin.exists(), f"binary {bin} doesn't exist!"
             console.rule(

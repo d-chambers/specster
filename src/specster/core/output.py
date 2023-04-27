@@ -9,7 +9,7 @@ from typing import Dict, Tuple
 import obspy
 
 from specster.core.models import SpecsterModel
-from specster.core.waveforms import read_ascii_stream, read_generic_trace
+from specster.core.parse import read_ascii_stream, read_generic_trace
 
 
 class BaseOutput(abc.ABC):

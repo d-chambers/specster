@@ -16,10 +16,10 @@ stdout_style = "bold blue"
 
 
 @contextmanager
-def program_render(console, title=""):
+def program_render(console, title="", supress_output=False):
     """Render the output of a program."""
 
-    if specster.settings.ci:  # do nothing on CI
+    if specster.settings.ci or supress_output:  # do nothing on CI
         yield
     else:
         with console.screen() as screen:

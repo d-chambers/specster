@@ -5,17 +5,32 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import Optional, Self
+from typing import Optional, Self, List
+from concurrent.futures import ProcessPoolExecutor, wait
 
 import pandas as pd
 
 import specster
 from specster.core.misc import copy_directory_contents
+from specster.core.parse import read_binaries_in_directory, write_directory_binaries
+
 from specster.core.stations import read_stations
 
 from ..core.control import BaseControl
 from .io import SpecParameters2D
 from .output2d import OutPut2D
+
+
+def _copy_set_source_run(control, source_index, base_path):
+    """Process for forking for running each source in parallel."""
+    base_path = Path(base_path)
+    out_path = base_path / f"{int(source_index):06}"
+    new = control.copy(out_path, exclude=[base_path.name])
+    # ensure only one source is set.
+    new.par.sources.sources = [new.par.sources.sources[source_index]]
+    new.write()
+    new.run(supress_output=True)
+    return out_path
 
 
 class Control2d(BaseControl):
@@ -46,14 +61,20 @@ class Control2d(BaseControl):
         """return the output of the control."""
         return OutPut2D(self.output_path, self)
 
-    def run(self, output_path: Optional[Path] = None) -> OutPut2D:
+    @property
+    def each_source_output(self) -> List[OutPut2D]:
+        """Return an output for each source."""
+        sorted_event_paths = sorted(x for x in self.each_source_path.iterdir())
+        return [OutPut2D(x/"OUTPUT_FILES", self) for x in sorted_event_paths]
+
+    def run(self, output_path: Optional[Path] = None, supress_output=False) -> OutPut2D:
         """Run the simulation."""
         # Determine if internal mesher should be run
         use_stations = self.par.receivers.use_existing_stations
         use_external = self.par.external_meshing.read_external_mesh
         if not (use_external and use_stations):
-            self.xmeshfem2d()
-        self.xspecfem2d()
+            self.xmeshfem2d(supress_output=supress_output)
+        self.xspecfem2d(supress_output=supress_output)
         self._copy_inputs_to_outputs()
         default_output = self.output_path
         if output_path is not None:
@@ -64,6 +85,21 @@ class Control2d(BaseControl):
             shutil.copytree(default_output, output_path)
         return OutPut2D(output_path or default_output, self)
 
+    def run_each_source(self) -> Self:
+        """Run the simulation separately for each source."""
+        sources = self.par.sources.sources
+        path = self._each_source_path
+        client = ProcessPoolExecutor()
+        base_path = self.base_path / path
+        futures = [
+            client.submit(_copy_set_source_run, self, i, base_path)
+            for i in range(len(sources))
+        ]
+        wait(futures)
+        exceptions = [x.exception() for x in futures]
+        assert not any(exceptions), "Exception raised in subprocess!"
+        return self
+
     def prepare_fwi_forward(self) -> Self:
         """Prepare for forward run in FWI."""
         self = super().prepare_fwi_forward()
@@ -72,15 +108,15 @@ class Control2d(BaseControl):
         self.par.mesh.ngnod = "9"
         return self
 
-    def xmeshfem2d(self):
+    def xmeshfem2d(self, supress_output=False):
         """Run the 2D mesher."""
         bin_path = specster.settings.get_specfem2d_binary_path()
-        return self._run_spec_command("xmeshfem2D", bin_path)
+        return self._run_spec_command("xmeshfem2D", bin_path, supress=supress_output)
 
-    def xspecfem2d(self):
+    def xspecfem2d(self, supress_output=False):
         """Run 2D specfem."""
         bin_path = specster.settings.get_specfem2d_binary_path()
-        return self._run_spec_command("xspecfem2D", bin_path)
+        return self._run_spec_command("xspecfem2D", bin_path, supress=supress_output)
 
     def _read_stations(self):
         """
@@ -103,10 +139,11 @@ class Control2d(BaseControl):
 
     def get_material_model_df(self) -> pd.DataFrame:
         """Return the material model used in the simulation."""
-        # expected_files = [f"proc*{x}" for x in {"rho", "vp", "vs", "x", "z"}]
+        return read_binaries_in_directory(self._data_path)
 
-    def set_material_model_df(self) -> pd.DataFrame:
+    def set_material_model_df(self, df):
         """Return the material model used in the simulation."""
+        write_directory_binaries(df, self._data_path)
 
 
 def load_2d_example(name, new_path=None) -> Control2d:

@@ -6,9 +6,10 @@ import re
 import shutil
 from functools import cache
 from pathlib import Path
-from typing import Dict, Literal, Optional
+from typing import Dict, Literal, Optional, Union
 
 import numpy as np
+import pooch
 from jinja2 import Template
 from pydantic import BaseModel
 
@@ -136,14 +137,16 @@ def write_model_data(self, key: Optional[str] = None):
     return " ".join(param_list)
 
 
-def copy_directory_contents(old, new):
+def copy_directory_contents(old, new, exclude=None):
     """
     Copy all contents of old directory to new directory.
     """
+    exclude = [] if not exclude else exclude
     old, new = Path(old), Path(new)
     assert old.exists() and old.is_dir()
     for path in old.rglob("*"):
-        if path.is_dir():
+        has_exclude = [x in str(path) for x in exclude]
+        if path.is_dir() or any(has_exclude):
             continue
         base = path.relative_to(old)
         new_path = new / base
@@ -202,44 +205,27 @@ def grid(x, y, z, resX=100, resY=100):
     return X, Y, Z
 
 
-def read_fortran_binary(filename):
-    """
-    Reads Fortran-style unformatted binary data into numpy array.
-    .. note::
-        The FORTRAN runtime system embeds the record boundaries in the data by
-        inserting an INTEGER*4 byte count at the beginning and end of each
-        unformatted sequential record during an unformatted sequential WRITE.
-        see: https://docs.oracle.com/cd/E19957-01/805-4939/6j4m0vnc4/index.html
-    """
-    nbytes = os.path.getsize(filename)
-    with open(filename, "rb") as file:
-        # read size of record
-        file.seek(0)
-        n = np.fromfile(file, dtype="int32", count=1)[0]
+def cache_file_or_dir(path, name):
+    """Create a persistent cache to a path.
 
-        if n == nbytes - 8:
-            file.seek(4)
-            data = np.fromfile(file, dtype="float32")
-            return data[:-1]
-        else:
-            file.seek(0)
-            data = np.fromfile(file, dtype="float32")
-            return data
+    This is mainly useful for testing.
+    """
+    # delete old cache
+    cache_loc = Path(pooch.os_cache("specster")) / name
+    if cache_loc.exists() and cache_loc.is_dir():
+        shutil.rmtree(cache_loc)
+    shutil.copytree(path, cache_loc)
 
 
-def write_fortran_binary(arr, filename):
-    """
-    Writes Fortran style binary files. Data are written as single precision
-    floating point numbers.
-    .. note::
-        FORTRAN unformatted binaries are bounded by an INT*4 byte count. This
-        function mimics that behavior by tacking on the boundary data.
-        https://docs.oracle.com/cd/E19957-01/805-4939/6j4m0vnc4/index.html
-    """
-    buffer = np.array([4 * len(arr)], dtype="int32")
-    data = np.array(arr, dtype="float32")
+def load_cache(name) -> Union[Path, None]:
+    """Get the path to a cache or raise not found Error."""
+    cache_loc = Path(pooch.os_cache("specster")) / name
+    if not cache_loc.exists():
+        return None
+    return cache_loc
 
-    with open(filename, "wb") as file:
-        buffer.tofile(file)
-        data.tofile(file)
-        buffer.tofile(file)
+
+def clear_cache():
+    """Delete the entire specster cache."""
+    cache_loc = Path(pooch.os_cache("specster"))
+    shutil.rmtree(cache_loc)

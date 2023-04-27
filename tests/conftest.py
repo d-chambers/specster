@@ -2,6 +2,7 @@
 Configuration for specster 2D tests.
 """
 import os
+import copy
 import shutil
 from functools import cache
 from pathlib import Path
@@ -11,6 +12,7 @@ import pytest
 import specster
 import specster.d2.io.parfile as pf
 from specster.core.misc import find_file_startswith
+from specster.core.misc import cache_file_or_dir, load_cache
 
 TEST_PATH = Path(__file__).absolute().parent
 
@@ -113,7 +115,7 @@ def control_2d(data_dir_path):
     return spec
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture(scope="session")
 def control_2d_default() -> specster.Control2d:
     """Return a default control 2D"""
     return specster.Control2d()
@@ -147,6 +149,27 @@ def modified_control_ran(modified_control):
     """Run the modified control"""
     modified_control.run().validate()
     return modified_control
+
+
+@pytest.fixture(scope='session')
+def control_2d_default_3_sources(control_2d_default, tmp_path_factory):
+    """Tests for running control 2d with 3 sources in parallel."""
+    cache_name = "control_2d_default_3_sources"
+    if not load_cache(cache_name):
+        control = control_2d_default.copy(tmp_path_factory.mktemp("3source"))
+        sources = control.sources
+        new1 = copy.deepcopy(sources[0])
+        new1.xs = 1000
+        new1.zs = 1000
+        new2 = copy.deepcopy(sources[0])
+        new2.xs = 2000
+        new2.zs = 2000
+        control.sources += [new1, new2]
+        control.run_each_source()
+        cache_file_or_dir(control.base_path, cache_name)
+    else:
+        control = specster.Control2d(load_cache(cache_name))
+    return control
 
 
 @pytest.fixture()

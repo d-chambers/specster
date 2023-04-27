@@ -28,7 +28,9 @@ class Displayer:
 
     def __getattr__(self, item):
         key = item.lower()
-        # hand case where key is another spec class, need to get new disp
+        if key == "_model":
+            return
+        # handle case where key is another spec class, need to get new disp
         value = getattr(self._model, key)
         if hasattr(value, "disp"):
             return value.disp
