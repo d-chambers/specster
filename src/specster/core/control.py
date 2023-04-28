@@ -307,6 +307,9 @@ class BaseControl:
         self.par.simulation_type = "3"
         self.par.save_forward = False
         self.par.mesh.model = "binary"
+        # save ascii kernels because they are easier to read.
+        # TODO look at using binary kernels in the future.
+        self.par.adjoint_kernel.save_ascii_kernels = True
         self.par.mesh.save_model = "default"
         self._writen = False
         return self

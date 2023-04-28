@@ -4,14 +4,15 @@ Main control class for interacting with specfem.
 from __future__ import annotations
 
 import shutil
+from functools import partial
 from pathlib import Path
 from typing import Optional, Self, List
-from concurrent.futures import ProcessPoolExecutor, wait
+from concurrent.futures import wait
 
 import pandas as pd
 
 import specster
-from specster.core.misc import copy_directory_contents
+from specster.core.misc import copy_directory_contents, get_executor, parallel_call
 from specster.core.parse import read_binaries_in_directory, write_directory_binaries
 
 from specster.core.stations import read_stations
@@ -95,15 +96,16 @@ class Control2d(BaseControl):
         self._prep_many_source_run()
         sources = self.par.sources.sources
         path = self._each_source_path
-        client = ProcessPoolExecutor()
         base_path = self.base_path / path
-        futures = [
-            client.submit(_copy_set_source_run, self, i, base_path)
+        callables = [
+            partial(
+                _copy_set_source_run,
+                control=self,
+                source_index=i,
+                base_path=base_path)
             for i in range(len(sources))
         ]
-        wait(futures)
-        exceptions = [x.exception() for x in futures]
-        assert not any(exceptions), "Exception raised in subprocess!"
+        parallel_call(callables)
         return self
 
     def prepare_fwi_forward(self) -> Self:

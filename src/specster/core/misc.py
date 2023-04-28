@@ -4,6 +4,7 @@ Misc small utilities.
 import os
 import re
 import shutil
+from concurrent.futures import ProcessPoolExecutor, wait
 from functools import cache
 from pathlib import Path
 from typing import Dict, Literal, Optional, Union
@@ -229,3 +230,23 @@ def clear_cache():
     """Delete the entire specster cache."""
     cache_loc = Path(pooch.os_cache("specster"))
     shutil.rmtree(cache_loc)
+
+
+@cache
+def get_executor():
+    """Return an executor for running things in parallel."""
+    return ProcessPoolExecutor()
+
+
+def call_it(call):
+    """Dummy function to call thing passed in """
+    return call()
+
+
+def parallel_call(funcs):
+    """Call each function in parallel."""
+    client = get_executor()
+    futures = [client.submit(call_it, func) for func in funcs]
+    wait(futures)
+    exceptions = [x.exception() for x in futures]
+    assert not any(exceptions), "Exception raised in subprocess!"

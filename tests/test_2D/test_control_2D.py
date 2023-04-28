@@ -1,6 +1,7 @@
 """
 Tests for control class.
 """
+import shutil
 from pathlib import Path
 import copy
 
@@ -9,6 +10,21 @@ import pytest
 import specster as sp
 from specster.core.misc import assert_models_equal
 from specster.d2.control2d import load_2d_example
+from specster.core.parse import read_binaries_in_directory
+from specster.core.misc import load_cache
+
+
+@pytest.fixture(scope='class')
+def initial_control_only_data(initial_control, tmp_path_factory):
+    """Create an initial """
+    cache_name = "control_2d_default_3_sources"
+    path = load_cache(cache_name)
+    if not path:
+        pytest.skip("Need to create cache first!, will run on next test run")
+    new_path = tmp_path_factory.mktemp("control_with_velmod")
+    expected_path = new_path / "DATA"
+    shutil.copytree(path / "DATA", new_path / "DATA")
+    return sp.Control2d(expected_path)
 
 
 class TestInit:
@@ -80,6 +96,34 @@ class TestMisc:
         control2 = sp.Control2d(path)
         assert control.par.adjoint_kernel.approximate_hess_kl
         assert control2.par.adjoint_kernel.approximate_hess_kl
+
+
+class TestReadWriteModel:
+    """Read the material models in data dir."""
+
+    def test_round_trip_model(self, initial_control_only_data):
+        """Ensure we can read velocity/density into memory."""
+        df = initial_control_only_data.get_material_model_df()
+        df['vp'] = df['vp'] * 1.2
+        initial_control_only_data.set_material_model_df(df)
+        df2 = initial_control_only_data.get_material_model_df()
+        assert df.equals(df2)
+
+    # @pytest.skip("only needed to prove updated model is used.")
+    def test_update_models_used(self, initial_control_only_data):
+        """Ensure we can read velocity/density into memory."""
+        initial_control_only_data.par.nstep = 1000
+        initial_control_only_data.prepare_fwi_forward()
+        initial_control_only_data.run()
+        st_initial = initial_control_only_data.output.get_waveforms()
+        # load model and change velocities, make sure streams change
+        df = initial_control_only_data.get_material_model_df()
+        df['vp'] = df['vp'] * 1.1
+        df['vs'] = df['vs'] * 1.1
+        initial_control_only_data.set_material_model_df(df)
+        initial_control_only_data.run()
+        st_next = initial_control_only_data.output.get_waveforms()
+        assert not st_initial == st_next
 
 
 @pytest.mark.e2e

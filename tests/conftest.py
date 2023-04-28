@@ -11,6 +11,7 @@ import pytest
 
 import specster
 import specster.d2.io.parfile as pf
+from specster.core.parse import read_ascii_kernels
 from specster.core.misc import find_file_startswith
 from specster.core.misc import cache_file_or_dir, load_cache
 
@@ -51,6 +52,15 @@ def test_data_path():
     return TEST_DATA_PATH
 
 
+@pytest.fixture(scope='session')
+def kernel_2d_dir_path():
+    """Return a path to the kernel directory."""
+    return Path(__file__).parent / "test_2D" / "test_data" / 'kernels'
+
+@pytest.fixture(scope='class')
+def weights_kernel(kernel_2d_dir_path):
+    return read_ascii_kernels(kernel_2d_dir_path, "weights")
+
 @cache
 def get_data_directories():
     """Get a list of data directories in examples cases."""
@@ -84,7 +94,6 @@ def par_file_path(request):
     rec_checker = par_path.name.endswith("rec_checker")
     doesnt_exist = not par_path.exists()
     not_data = "DATA" not in path_str
-
     if any([not_ready, doesnt_exist, not_data, rec_checker]):
         pytest.skip(f"{data_dir_path} has not par file.")
     return par_path
@@ -172,6 +181,25 @@ def control_2d_default_3_sources(control_2d_default, tmp_path_factory):
         control.par.visualizations.postscript.output_postscript_snapshot = False
         control.run_each_source()
 
+        cache_file_or_dir(control.base_path, cache_name)
+    else:
+        control = specster.Control2d(load_cache(cache_name))
+    return control
+
+
+@pytest.fixture(scope="class")
+def initial_control(control_2d_default_3_sources):
+    """Get the initial control and generate waveforms."""
+    cache_name = "initial_control_fwi"
+    control_true = control_2d_default_3_sources
+    if not load_cache(cache_name):
+        control = control_true.copy()
+        # make salt a bit slower and run.
+        material = control.par.material_models.models[3]
+        material.Vp *= 0.97
+        material.Vs *= 0.97
+        control.write()
+        control.run_each_source()
         cache_file_or_dir(control.base_path, cache_name)
     else:
         control = specster.Control2d(load_cache(cache_name))

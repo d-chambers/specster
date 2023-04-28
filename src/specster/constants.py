@@ -5,6 +5,8 @@ Constant values for specster.
 PROC_ZEROES = 6
 IGNORE_BINS = {"NSPECibool"}
 
+XYZ = ('x', 'z', 'y')
+
 # parameter value map
 _SUB_VALUES = {".false.": False, ".true.": True}
 

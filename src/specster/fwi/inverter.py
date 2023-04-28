@@ -5,13 +5,14 @@ import shutil
 from typing import Optional, Literal, Type, Union, List
 from pathlib import Path
 from functools import cache
-from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
+import pandas as pd
 
 import specster as sp
 from ..core.control import BaseControl
 from .misfit import _BaseMisFit
+from specster.core.misc import parallel_call
 from specster.core.parse import read_ascii_stream
 
 
@@ -53,11 +54,15 @@ class Inverter:
         then each of these waveforms in the convention semp format.
     """
     _observed_path = "OBSERVED_STREAMS"
+    _iteration_dir = "ITERATIONS"
+    _stats_columns = ("data_misfit, model_misfit, kernel_step")
+    _scratch_path = "SCRATCH"
+    _step_range = (0.001, 0.02)
 
     def __init__(
             self,
             observed_data_path: Union[Path, BaseControl],
-            initial_control: BaseControl,
+            control: BaseControl,
             misfit: Type[_BaseMisFit],
             true_control: Optional[BaseControl] = None,
             optimization: Literal['steepest descent'] = "steepest descent",
@@ -75,9 +80,12 @@ class Inverter:
         self._optimization = optimization
         self._stream_pre_process = stream_pre_processing
         self.working_path = Path(working_path)
-        new_control = initial_control.copy(self.working_path)
-        self._initial_control = _run_each_source(new_control)
+        new_control = control.copy(self.working_path)
+        self._control = _run_each_source(new_control)
         self._create_working_directory(observed_data_path)
+        self._df = pd.DataFrame(columns=list(self._stats_columns))
+        self._misfit_aggregator = misfit_aggregator
+        self._true_model = self._maybe_load_true_model()
 
     def _create_working_directory(self, observed_data_path):
         """Create a working directory with observed/synthetic data."""
@@ -86,23 +94,34 @@ class Inverter:
         if not obs_data_path.is_dir():
             shutil.copytree(observed_data_path, obs_data_path)
 
-    def invert(self, max_iterations=10):
+
+
+    def run_inversion_iteration(self):
 
         """
         Run the inversion iteratively.
         """
-        initial_streams = [
+        # add new row to tracking df.
+        self._df = pd.concat([self._df, pd.DataFrame(columns=self._stats_columns)])
+
+        # get adjoints for current data.
+        current_streams = [
             self._preprocess_stream(x.get_waveforms())
-            for x in self._initial_control.each_source_output
+            for x in self._control.each_source_output
         ]
-        misfit, adjoints = self._calc_misfit_adjoints(initial_streams)
+        misfit, adjoints = self._calc_misfit_adjoints(current_streams)
+        self._df.loc[len(self._df)-1, 'misfit'] = misfit
+
         sub_controls = self.get_controls()
         for control, adjoint in zip(sub_controls, adjoints):
             control.prepare_fwi_adjoint().write_adjoint_sources(adjoint)
-
+        # run each
         breakpoint()
-        pp = ProcessPoolExecutor()
-
+        parallel_call([x.run for x in sub_controls])
+        control.run()
+        output = control.output
+        output.load_kernel()
+        pp = get_executor()
         out = pp.map(_run_controls, sub_controls)
         #
         # if not len(initial_st):  # need to run initial control
@@ -120,7 +139,7 @@ class Inverter:
     def get_controls(self) -> List[sp.Control2d]:
         """Get a control2d for each event."""
         out = []
-        for path in sorted(self._initial_control.each_source_path.iterdir()):
+        for path in sorted(self._control.each_source_path.iterdir()):
             out.append(sp.Control2d(path))
         return out
 
@@ -133,7 +152,8 @@ class Inverter:
             misfit = self._misfit(st_obs, st_syn)
             misfits.append(np.array(list(misfit.calc_misfit().values())))
             adjoints.append(misfit.get_adjoint_sources())
-        return misfits, adjoints
+        misfit_total_array = np.hstack(misfits)
+        return self._misfit_aggregator(misfit_total_array), adjoints
 
     def _preprocess_stream(self, st):
         """Pre-process the stream"""
@@ -141,6 +161,18 @@ class Inverter:
             return st.detrend('linear').taper(0.5)
         else:
             return self._stream_pre_process(st)
+
+    @property
+    def iteration_path(self):
+        path = self.working_path / self._iteration_dir
+        path.mkdir(exist_ok=True, parents=True)
+        return path
+
+    @property
+    def scratc_path(self):
+        path = self.working_path / self._scratch_path
+        path.mkdir(exist_ok=True, parents=True)
+        return path
 
     @property
     @cache
@@ -152,3 +184,9 @@ class Inverter:
             )
         ]
         return st_obs_list
+
+    def _maybe_load_true_model(self):
+        """If a true control is used, load model."""
+        if self._true_control:
+            self._true_control.load
+        pass

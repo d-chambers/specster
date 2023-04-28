@@ -14,6 +14,7 @@ from pydantic import Field
 from specster.core.misc import match_between
 from specster.core.models import SpecsterModel
 from specster.core.output import BaseOutput
+from specster.core.parse import read_ascii_kernels
 
 from .viz import plot_kernels, plot_single_kernel
 
@@ -224,17 +225,10 @@ class OutPut2D(BaseOutput):
     @cache
     def load_kernel(
         self,
-        kernel_type: KERNEL_TYPES = "rhop_alpha_beta",
+        kernel=None,
     ) -> pd.DataFrame:
         """Load a kernel into memory."""
-
-        kernel_dict = self.load_event_kernels(kernel_type)
-        new = [x.set_index(["x", "z"]) for x in kernel_dict.values()]
-        combined = reduce(operator.add, new).reset_index()
-        # check that coords haven't changed
-        first_df = list(kernel_dict.values())[0]
-        assert np.all(combined[["x", "z"]].values == first_df[["x", "z"]])
-        return combined
+        return read_ascii_kernels(self.path, kernel)
 
     plot_kernels = plot_kernels
     plot_single_kernel = plot_single_kernel

@@ -4,12 +4,13 @@ Utils module to help parse specfem files.
 from pathlib import Path
 from typing import Dict
 from collections import defaultdict
+from functools import reduce
 
 import numpy as np
 import obspy
 import pandas as pd
 
-from specster.constants import _SUB_VALUES, PROC_ZEROES, IGNORE_BINS
+from specster.constants import _SUB_VALUES, XYZ, IGNORE_BINS
 
 
 def extract_parline_key_value(line):
@@ -202,3 +203,34 @@ def write_ascii_waveforms(tr, filename):
     data[:, 0] = tr.times() + tr.stats.starttime.timestamp
     data[:, 1] = tr.data
     np.savetxt(filename, data)
+
+
+def read_ascii_kernels(path, kernel=None, coords=XYZ[:2]):
+    """Read all kernels in directory. """
+    coords = list(coords)
+    kernel_paths = sorted(Path(path).glob("*kernel.dat"))
+    if kernel:
+        kernel_paths = [x for x in kernel_paths if kernel in str(x)]
+
+    out = defaultdict(list)
+
+    for kernel_path in kernel_paths:
+        name = kernel_path.name
+        proc = int(name.split('_')[0].replace("proc", ""))
+        field_names = coords + name.split('_')[1:-1]
+        df = pd.read_csv(
+            kernel_path, delim_whitespace=True, names=field_names, header=None
+        )
+        df["proc"] = proc
+        out[proc].append(df)
+
+    # merge each process on coords
+
+    df_list_out = []
+    for proc, df_list in out.items():
+        df_merged = reduce(
+            lambda left, right: pd.merge(
+                left, right, on=list(coords[:2]), how='outer'), df_list
+        )
+        df_list_out.append(df_merged)
+    return pd.concat(df_list_out)
