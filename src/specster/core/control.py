@@ -24,8 +24,9 @@ from specster.core.models import SpecsterModel
 from specster.core.output import BaseOutput
 from specster.core.printer import console, program_render
 from specster.core.stations import _maybe_use_station_file
-from specster.core.parse import write_ascii_waveforms
+from specster.core.parse import write_ascii_waveforms, read_binaries_in_directory, write_directory_binaries
 from specster.exceptions import SpecFEMError
+from specster.core.misc import run_new_par
 
 
 class BaseControl:
@@ -97,14 +98,6 @@ class BaseControl:
     @abc.abstractmethod
     def output(self) -> BaseOutput:
         """Return an output object for working with simulation output."""
-
-    @abc.abstractmethod
-    def get_material_model_df(self) -> pd.DataFrame:
-        """Return the material model used in the simulation."""
-
-    @abc.abstractmethod
-    def set_material_model_df(self) -> pd.DataFrame:
-        """Return the material model used in the simulation."""
 
     @abc.abstractmethod
     def run(self, output_path=None) -> BaseOutput:
@@ -291,12 +284,12 @@ class BaseControl:
         Prepare control structure for forward simulation in FWI workflow.
         """
         self.par.simulation_type = "1"
-        self.setup_with_binary_database = "1"
         self.par.save_forward = True
+        self.par.mesh.setup_with_binary_database = "1"
         self.par.mesh.save_model = "binary"
         self.par.mesh.model = "default"
         self.par.adjoint_kernel.approximate_hess_kl = True
-        self._writen = False  # ensure run will rewrite files.
+        self.write(overwrite=True)
         return self
 
     def prepare_fwi_adjoint(self) -> Self:
@@ -312,6 +305,39 @@ class BaseControl:
         self.par.adjoint_kernel.save_ascii_kernels = True
         self.par.mesh.save_model = "default"
         self._writen = False
+        return self
+
+    def get_material_model_df(self, overwrite=False):
+        """
+        Ensure the material model is written to disk.
+
+        If overwrite == True, force regeneration of material model
+        by running mesher and specfem.
+        """
+        model = read_binaries_in_directory(self._data_path)
+        if len(model) and not overwrite:
+            return model
+        with run_new_par(self) as par:
+            par.simulation_type = "1"
+            par.setup_with_binary_database = "1"
+            par.save_forward = False
+            par.mesh.save_model = "binary"
+            par.mesh.model = "default"
+            par.NSTEP = 10  # limit number of steps so simulation is fast.
+        model = read_binaries_in_directory(self._data_path)
+        return model
+
+    def set_material_model_df(self, df):
+        """
+        Set the material model used by control.
+
+        Also flips needed flags so the model will be used in next run.
+        """
+        write_directory_binaries(df, self._data_path)
+        self.par.mesh.setup_with_binary_database = "2"
+        self.par.mesh.model = "binary"
+        self.par.mesh.save_model = "default"
+        self.write(overwrite=True)
         return self
 
     def write_adjoint_sources(self, st) -> Self:

@@ -1,10 +1,11 @@
 """
 Misc small utilities.
 """
-import os
+import copy
 import re
 import shutil
 from concurrent.futures import ProcessPoolExecutor, wait
+from contextlib import contextmanager, suppress
 from functools import cache
 from pathlib import Path
 from typing import Dict, Literal, Optional, Union
@@ -250,3 +251,28 @@ def parallel_call(funcs):
     wait(futures)
     exceptions = [x.exception() for x in futures]
     assert not any(exceptions), "Exception raised in subprocess!"
+
+
+def run_new_par(control):
+    """Return a new parameter object which is overwritten then run
+    control and switch back.
+     """
+    par_old = copy.deepcopy(control.par)
+    new_par = copy.deepcopy(control.par)
+    yield new_par
+    control.par = new_par
+    control.write(overwrite=True)
+    try:
+        control.run()
+    except Exception as e:
+        control.par = par_old
+        control.write(overwrite=True)
+        raise e
+    control.par = par_old
+    control.write(overwrite=True)
+
+
+
+
+
+

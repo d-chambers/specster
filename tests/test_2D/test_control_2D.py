@@ -109,20 +109,21 @@ class TestReadWriteModel:
         df2 = initial_control_only_data.get_material_model_df()
         assert df.equals(df2)
 
-    # @pytest.skip("only needed to prove updated model is used.")
+    @pytest.mark.slow
     def test_update_models_used(self, initial_control_only_data):
         """Ensure we can read velocity/density into memory."""
-        initial_control_only_data.par.nstep = 1000
-        initial_control_only_data.prepare_fwi_forward()
-        initial_control_only_data.run()
-        st_initial = initial_control_only_data.output.get_waveforms()
+        control = initial_control_only_data
+        control.par.nstep = 1000
+        control.prepare_fwi_forward()
+        control.run()
+        st_initial = control.output.get_waveforms()
         # load model and change velocities, make sure streams change
-        df = initial_control_only_data.get_material_model_df()
+        df = control.get_material_model_df()
         df['vp'] = df['vp'] * 1.1
         df['vs'] = df['vs'] * 1.1
-        initial_control_only_data.set_material_model_df(df)
-        initial_control_only_data.run()
-        st_next = initial_control_only_data.output.get_waveforms()
+        control.set_material_model_df(df)
+        control.run()
+        st_next = control.output.get_waveforms()
         assert not st_initial == st_next
 
 

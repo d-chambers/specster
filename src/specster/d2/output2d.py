@@ -127,16 +127,16 @@ class SPECFEM2DStats(SpecsterModel):
         """Return a dict of specfem data."""
         out = dict(
             mpi_slices=match_between(txt, "total of", "slices", 1),
-            receiver_count=match_between(txt, "found a total of", "receivers"),
+            receiver_count=match_between(txt, "found a total of", "receivers", default=-1),
             spec_duration=match_between(txt, "time of the system :", "s"),
             max_cfl=match_between(txt, r"must be below about 0.50 or so"),
-            elements=match_between(txt, "number of elements:"),
+            elements=match_between(txt, "number of elements:", default=-1),
             regular_elements=match_between(txt, "of which", "are regular elements"),
             pml_elements=match_between(txt, "and ", "are PML elements"),
-            acoustic_elements=match_between(txt, "of acoustic elements           ="),
-            elastic_elements=match_between(txt, "of elastic/visco/poro elements ="),
-            max_grid_size=match_between(txt, "Max grid size ="),
-            min_grid_size=match_between(txt, "Min grid size ="),
+            acoustic_elements=match_between(txt, "of acoustic elements           =", default=-1),
+            elastic_elements=match_between(txt, "of elastic/visco/poro elements =", default=-1),
+            max_grid_size=match_between(txt, "Max grid size =", default=-1),
+            min_grid_size=match_between(txt, "Min grid size =", default=-1),
             min_gll_distance=match_between(txt, "Minimum GLL point distance  ="),
             av_gll_distance=match_between(txt, "Average GLL point distance  ="),
             max_frequency_resolved=match_between(

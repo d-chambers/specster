@@ -46,6 +46,18 @@ def pytest_sessionstart(session):
         # TODO need to set logic to load/cache/compile specfem
 
 
+def pytest_collection_modifyitems(config, items):
+    keywordexpr = config.option.keyword
+    markexpr = config.option.markexpr
+    if keywordexpr or markexpr:
+        return  # let pytest handle this
+
+    skip_mymarker = pytest.mark.skip(reason='slow not selected')
+    for item in items:
+        if 'slow' in item.keywords:
+            item.add_marker(skip_mymarker)
+
+
 @pytest.fixture(scope="session")
 def test_data_path():
     """Return the test data path for the whole directory."""

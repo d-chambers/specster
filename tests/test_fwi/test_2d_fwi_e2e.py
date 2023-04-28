@@ -39,7 +39,7 @@ def run_inverter(inverter):
 
 
 @pytest.mark.e2e
-@pytest.mark.slow
+# @pytest.mark.slow
 class TestBasicWorkflow:
     """Ensure the basic workflow functions"""
     def test_inverter(self, run_inverter):

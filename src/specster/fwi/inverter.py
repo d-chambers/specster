@@ -55,7 +55,7 @@ class Inverter:
     """
     _observed_path = "OBSERVED_STREAMS"
     _iteration_dir = "ITERATIONS"
-    _stats_columns = ("data_misfit, model_misfit, kernel_step")
+    _stats_columns = ("data_misfit", "model_misfit", "kernel_step")
     _scratch_path = "SCRATCH"
     _step_range = (0.001, 0.02)
 
@@ -102,7 +102,7 @@ class Inverter:
         Run the inversion iteratively.
         """
         # add new row to tracking df.
-        self._df = pd.concat([self._df, pd.DataFrame(columns=self._stats_columns)])
+        self._df = pd.concat([self._df, pd.DataFrame(columns=list(self._stats_columns))])
 
         # get adjoints for current data.
         current_streams = [
@@ -110,11 +110,10 @@ class Inverter:
             for x in self._control.each_source_output
         ]
         misfit, adjoints = self._calc_misfit_adjoints(current_streams)
-        self._df.loc[len(self._df)-1, 'misfit'] = misfit
+        self._df.loc[len(self._df)-1, 'data_misfit'] = misfit
+        self._write_adjoints_to_each_event(adjoints)
 
-        sub_controls = self.get_controls()
-        for control, adjoint in zip(sub_controls, adjoints):
-            control.prepare_fwi_adjoint().write_adjoint_sources(adjoint)
+
         # run each
         breakpoint()
         parallel_call([x.run for x in sub_controls])
@@ -133,6 +132,12 @@ class Inverter:
         return self
 
 
+    def _write_adjoints_to_each_event(self, adjoints):
+        """Write the adjoints to disk."""
+        sub_controls = self.get_controls()
+        for control, adjoint in zip(sub_controls, adjoints):
+            control.prepare_fwi_adjoint().write_adjoint_sources(adjoint)
+
     def _save_adjoints(self, adjoints):
         """Save adjoints back to disk."""
 
@@ -143,7 +148,7 @@ class Inverter:
             out.append(sp.Control2d(path))
         return out
 
-    def _calc_misfit_adjoints(self, current_st_list):
+    def _calc_misfit_adjoints(self, current_st_list, include_adjoint=True):
         """Calculate the misfit and adjoints."""
         assert len(current_st_list) == len(self._st_obs_list)
         misfits = []
@@ -151,9 +156,11 @@ class Inverter:
         for st_obs, st_syn in zip(self._st_obs_list, current_st_list):
             misfit = self._misfit(st_obs, st_syn)
             misfits.append(np.array(list(misfit.calc_misfit().values())))
-            adjoints.append(misfit.get_adjoint_sources())
+            if include_adjoint:
+                adjoints.append(misfit.get_adjoint_sources())
         misfit_total_array = np.hstack(misfits)
         return self._misfit_aggregator(misfit_total_array), adjoints
+
 
     def _preprocess_stream(self, st):
         """Pre-process the stream"""
@@ -188,5 +195,5 @@ class Inverter:
     def _maybe_load_true_model(self):
         """If a true control is used, load model."""
         if self._true_control:
-            self._true_control.load
-        pass
+            return self._true_control.get_material_model_df()
+        return None

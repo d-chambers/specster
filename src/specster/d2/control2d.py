@@ -167,13 +167,6 @@ class Control2d(BaseControl):
         data = [x.dict() for x in self._read_stations()]
         return pd.DataFrame(data)
 
-    def get_material_model_df(self) -> pd.DataFrame:
-        """Return the material model used in the simulation."""
-        return read_binaries_in_directory(self._data_path)
-
-    def set_material_model_df(self, df):
-        """Return the material model used in the simulation."""
-        write_directory_binaries(df, self._data_path)
 
 
 def load_2d_example(name, new_path=None) -> Control2d:
