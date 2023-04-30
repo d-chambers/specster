@@ -3,8 +3,9 @@ Class for inverting material properties.
 """
 import shutil
 from typing import Optional, Literal, Type, Union, List
+from operator import add
 from pathlib import Path
-from functools import cache
+from functools import cache, partial, reduce
 
 import numpy as np
 import pandas as pd
@@ -14,6 +15,9 @@ from ..core.control import BaseControl
 from .misfit import _BaseMisFit
 from specster.core.misc import parallel_call
 from specster.core.parse import read_ascii_stream
+from specster.core.printer import program_render
+
+from specster.core.printer import console
 
 
 def _run_each_source(control):
@@ -41,7 +45,6 @@ def _run_controls(control: sp.Control2d):
     return control.base_path
 
 
-
 class Inverter:
     """
     Class for running inversions.
@@ -57,6 +60,7 @@ class Inverter:
     _iteration_dir = "ITERATIONS"
     _stats_columns = ("data_misfit", "model_misfit", "kernel_step")
     _scratch_path = "SCRATCH"
+    _kernels = ('alpha', 'beta')
     _step_range = (0.001, 0.02)
 
     def __init__(
@@ -94,29 +98,40 @@ class Inverter:
         if not obs_data_path.is_dir():
             shutil.copytree(observed_data_path, obs_data_path)
 
-
+    def _run_forward(self, control_list=None):
+        """Run one forward iteration."""
+        controls = control_list or self.get_controls()
+        run_list = [partial(x.run, supress_output=True) for x in controls]
+        parallel_call(run_list)
 
     def run_inversion_iteration(self):
-
         """
         Run the inversion iteratively.
         """
-        # add new row to tracking df.
-        self._df = pd.concat([self._df, pd.DataFrame(columns=list(self._stats_columns))])
-
-        # get adjoints for current data.
-        current_streams = [
-            self._preprocess_stream(x.get_waveforms())
-            for x in self._control.each_source_output
-        ]
-        misfit, adjoints = self._calc_misfit_adjoints(current_streams)
-        self._df.loc[len(self._df)-1, 'data_misfit'] = misfit
-        self._write_adjoints_to_each_event(adjoints)
-
+        iteration_str = f"Iteration {len(self._df) + 1:d}"
+        with program_render(console, title=f"FWI {iteration_str}", supress_output=True):
+            console.rule(
+                f"[bold red]Running fwi inversion {iteration_str}"
+            )
+            # add new row to tracking df.
+            self._df = pd.concat(
+                [self._df, pd.DataFrame(columns=list(self._stats_columns))]
+            )
+            controls = self.get_controls()  # controls for each event
+            # get adjoints for current data, update misfit and write adjoints.
+            current_streams = self._get_current_event_streams()
+            misfit, adjoints = self._calc_misfit_adjoints(current_streams)
+            console.print(f"Data misfit is {misfit}")
+            self._df.loc[len(self._df) - 1, 'data_misfit'] = misfit
+            self._write_adjoints_to_each_event(adjoints, control_list=controls)
+            # run FWI, get aggregated kernels
+            console.print(f"Running adjoints for {len(controls)} events")
+            self._run_forward(control_list=controls)
+            self._aggregate_kernels(controls)
+        breakpoint()
 
         # run each
-        breakpoint()
-        parallel_call([x.run for x in sub_controls])
+
         control.run()
         output = control.output
         output.load_kernel()
@@ -131,12 +146,44 @@ class Inverter:
         # initial_misfit = self._calc_misfit_adjoints(current_st_list=initial_st)
         return self
 
+    def _aggregate_kernels(self, control_list=None):
+        """
+        Load each of the kernels, apply preconditioning, sum, and save
+        to disk.
+        """
+        controls = control_list or self.get_controls()
+        out = {}
+        for control in controls:
+            kernels = control.output.load_kernel().set_index(['z', 'x'])
+            kernel_conditioned = self.apply_kernel_conditioning(kernels)
+            out[control.base_path.name] = kernel_conditioned
+        summed = reduce(add, out.values())
+        breakpoint()
 
-    def _write_adjoints_to_each_event(self, adjoints):
+    def apply_kernel_conditioning(self, kernel_df):
+        """
+        Apply preprocessing to the kernels.
+
+        By default this is just multiplying the hessian.
+        """
+        new = pd.DataFrame(index=kernel_df.index)
+        hess_1 = kernel_df['Hessian1']
+        for kname in self._kernels:
+            new[kname] = kernel_df[kname] / hess_1
+        return new
+
+    def _write_adjoints_to_each_event(self, adjoints, control_list=None):
         """Write the adjoints to disk."""
-        sub_controls = self.get_controls()
-        for control, adjoint in zip(sub_controls, adjoints):
+        controls = control_list or self.get_controls()
+        for control, adjoint in zip(controls, adjoints):
             control.prepare_fwi_adjoint().write_adjoint_sources(adjoint)
+
+    def _get_current_event_streams(self):
+        current_streams = [
+            self._preprocess_stream(x.get_waveforms())
+            for x in self._control.each_source_output
+        ]
+        return current_streams
 
     def _save_adjoints(self, adjoints):
         """Save adjoints back to disk."""
@@ -160,7 +207,6 @@ class Inverter:
                 adjoints.append(misfit.get_adjoint_sources())
         misfit_total_array = np.hstack(misfits)
         return self._misfit_aggregator(misfit_total_array), adjoints
-
 
     def _preprocess_stream(self, st):
         """Pre-process the stream"""

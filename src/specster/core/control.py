@@ -44,6 +44,7 @@ class BaseControl:
     sources = SequenceDescriptor("par.sources.sources")
     models = SequenceDescriptor("par.material_models.models")
     stations = SequenceDescriptor("par.receivers.stations")
+
     receiver_sets = SequenceDescriptor(
         "par.receivers.receiver_sets",
         set_functions=(_maybe_use_station_file,),
@@ -129,6 +130,7 @@ class BaseControl:
             List of directories of files to exclude.
         """
         path = path or Path(tempfile.TemporaryDirectory().name)
+        path = Path(path)
         assert not path.is_file(), "must pass a directory."
         new = copy.deepcopy(self)
         new._writen = False
@@ -236,11 +238,11 @@ class BaseControl:
 
     def _run_spec_command(self, command: str, bin_path, supress=False):
         """Run a specfem command."""
-
-        with program_render(console, title=command, supress_output=supress):
+        render = program_render(console, title=command, supress_output=supress)
+        with render as (con, _):
             bin = bin_path / command
             assert bin.exists(), f"binary {bin} doesn't exist!"
-            console.rule(
+            con.rule(
                 f"[bold red]Running specfem command: {command} on "
                 f"{self.base_path} with binary {bin}",
             )
@@ -248,11 +250,11 @@ class BaseControl:
                 self.write(overwrite=True)
                 self._writen = True
             self.ensure_output_path_exists()
-            out = run_command(str(bin), cwd=self.base_path, console=console)
-        out["command"], out["path"] = command, self.base_path
-        # write ouput
-        self._write_output_file(out["stdout"], f"{command}_stdout.txt", console)
-        self._write_output_file(out["stderr"], f"{command}_stderr.txt", console)
+            out = run_command(str(bin), cwd=self.base_path, console=con)
+            out["command"], out["path"] = command, self.base_path
+            # write ouput
+            self._write_output_file(out["stdout"], f"{command}_stdout.txt", con)
+            self._write_output_file(out["stderr"], f"{command}_stderr.txt", con)
         # raise error if std error is not None
         if out["stderr"]:
             raise SpecFEMError(out["stderr"])
@@ -305,6 +307,7 @@ class BaseControl:
         self.par.adjoint_kernel.save_ascii_kernels = True
         self.par.mesh.save_model = "default"
         self._writen = False
+        self.write(overwrite=True)
         return self
 
     def get_material_model_df(self, overwrite=False):
@@ -317,13 +320,13 @@ class BaseControl:
         model = read_binaries_in_directory(self._data_path)
         if len(model) and not overwrite:
             return model
-        with run_new_par(self) as par:
+        with run_new_par(self, supress_output=True) as par:
             par.simulation_type = "1"
-            par.setup_with_binary_database = "1"
             par.save_forward = False
+            par.mesh.setup_with_binary_database = "1"
             par.mesh.save_model = "binary"
             par.mesh.model = "default"
-            par.NSTEP = 10  # limit number of steps so simulation is fast.
+            par.nstep = 10  # limit number of steps so simulation is fast.
         model = read_binaries_in_directory(self._data_path)
         return model
 

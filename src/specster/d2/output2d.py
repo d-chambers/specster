@@ -7,6 +7,7 @@ from functools import cache, cached_property, reduce
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Self, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from pydantic import Field
@@ -15,8 +16,9 @@ from specster.core.misc import match_between
 from specster.core.models import SpecsterModel
 from specster.core.output import BaseOutput
 from specster.core.parse import read_ascii_kernels
+from specster.core.plotting import plot_gll_historgrams, plot_kernels
 
-from .viz import plot_kernels, plot_single_kernel
+# from .viz import plot_kernels, plot_single_kernel
 
 KERNEL_TYPES = Literal["rhop_alpha_beta", "rho_kappa_mu"]
 
@@ -207,28 +209,50 @@ class OutPut2D(BaseOutput):
         data = [x.dict() for x in self.stats.fluid_gll_hist]
         return pd.DataFrame(data)
 
-    def load_event_kernels(
-        self,
-        kernel_type: KERNEL_TYPES = "rhop_alpha_beta",
-    ) -> Dict[str, pd.DataFrame]:
-        """Load kernels into a dict."""
-        out = {}
-        names = ["x", "z"] + list(kernel_type.split("_"))
-        glob = f"*{kernel_type}_kernel.dat"
-        for path in self.path.glob(glob):
-            name = path.name.split("_")[0]
-            out[name] = pd.read_csv(
-                path, delim_whitespace=True, names=names, header=None
-            )
-        return out
+    # def load_event_kernels(
+    #         self,
+    #         kernel_type: KERNEL_TYPES = "rhop_alpha_beta",
+    # ) -> Dict[str, pd.DataFrame]:
+    #     """Load kernels into a dict."""
+    #
+    #     out = {}
+    #     names = ["x", "z"] + list(kernel_type.split("_"))
+    #     glob = f"*{kernel_type}_kernel.dat"
+    #     for path in self.path.glob(glob):
+    #         name = path.name.split("_")[0]
+    #         out[name] = pd.read_csv(
+    #             path, delim_whitespace=True, names=names, header=None
+    #         )
+    #     return out
+
+    def plot_gll_per_wavelength_histogram(self):
+        """Plots GLL per wavelength."""
+        fig, axes = plt.subplots(1, 2, figsize=(8, 3.5))
+
+        fluid = self.fluid_gll_hist_df
+        plot_gll_historgrams(fluid, ax=axes[0], title="Fluid GLL Histogram")
+
+        solid = self.solid_gll_hist_df
+        plot_gll_historgrams(solid, ax=axes[1], title="Solid GLL Histogram")
+
+        plt.tight_layout()
+        return fig, axes
+
+    def plot_kernel(self, kernel=None):
+        """Make a plot of the material models, stations, and sources."""
+        # material_df = self.get_material_model_df()
+        df = self.load_kernel(kernel=kernel)
+        fig, axes = plot_kernels(self, df, columns=kernel)
+
+        return fig, axes
 
     @cache
     def load_kernel(
-        self,
-        kernel=None,
+            self,
+            kernel=None,
     ) -> pd.DataFrame:
         """Load a kernel into memory."""
         return read_ascii_kernels(self.path, kernel)
-
-    plot_kernels = plot_kernels
-    plot_single_kernel = plot_single_kernel
+    #
+    # plot_kernels = plot_kernels
+    # plot_single_kernel = plot_single_kernel

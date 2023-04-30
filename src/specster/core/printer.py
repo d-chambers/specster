@@ -15,17 +15,32 @@ stderr_style = "bold red"
 stdout_style = "bold blue"
 
 
+class SilentDummy:
+    """A class to just swallow any attrs."""
+
+    def print(self, *args, **kwargs):
+        pass
+
+    def rule(self, *args, **kwargs):
+        pass
+
+    @contextmanager
+    def screen(self):
+        yield self
+
+
 @contextmanager
 def program_render(console, title="", supress_output=False):
     """Render the output of a program."""
 
     if specster.settings.ci or supress_output:  # do nothing on CI
-        yield
+        yield SilentDummy(), None
     else:
         with console.screen() as screen:
-            yield screen
-        console.print()
-        console.rule(f"[bold red]Finished command: {title}")
+            yield console, screen
+        if title:
+            console.print()
+            console.rule(f"[bold red]Finished command: {title}")
 
 
 def print_output_run(output_dict):

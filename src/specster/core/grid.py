@@ -6,27 +6,35 @@ rectangular format (hopefully with minimal loss).
 """
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator, NearestNDInterpolator
+from scipy.spatial import cKDTree
 
+from scipy.interpolate.interpnd import _ndim_coords_from_arrays
 
 def _get_regularly_sampled_coords(array):
     """Get extrapolate array into regularly sampled coords."""
-
     mins = np.min(array, axis=0)
     maxs = np.max(array, axis=0)
     lens = maxs - mins
-    dx = np.sqrt(len(array) / np.sum(lens))
+    dx = np.sqrt(np.prod(lens) / len(array))
     out = [np.arange(mi, ma + dx, dx) for mi, ma in zip(mins, maxs)]
-    return out
+    return out, dx
 
 
 def df_to_grid(df, column, coords=('x', 'z')):
     """Convert df to a grid of values."""
-    new_coords = _get_regularly_sampled_coords(df[['x', 'z']].values)
-    old_coords = df[list(coords)]
+    xz = df[['x', 'z']].values
+    new_coords, dx = _get_regularly_sampled_coords(xz)
+    old_coords = df[list(coords)].values
     X, Y = np.meshgrid(*new_coords)
-    # interp = LinearNDInterpolator(old_coords, df[column])
+    # interp = LinearNDInterpolator(old_coords, df[column], fill_value=0.0)
     interp = NearestNDInterpolator(old_coords, df[column])
     out = interp(X, Y)
+    # Nan out points with distance gt than 2DX. This is needed because
+    # specfem files don't store 0s of values above topography.
+    tree = cKDTree(old_coords)
+    xi = _ndim_coords_from_arrays((X, Y), ndim=old_coords.shape[1])
+    dists, indexes = tree.query(xi)
+    out[dists > 4*dx] = np.NaN
     return new_coords, out
 
 

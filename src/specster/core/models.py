@@ -1,6 +1,7 @@
 """
 Module for models.
 """
+import copy
 from functools import cached_property
 from typing import Optional
 

@@ -192,7 +192,6 @@ def control_2d_default_3_sources(control_2d_default, tmp_path_factory):
         # ps images are huge; don't do them.
         control.par.visualizations.postscript.output_postscript_snapshot = False
         control.run_each_source()
-
         cache_file_or_dir(control.base_path, cache_name)
     else:
         control = specster.Control2d(load_cache(cache_name))

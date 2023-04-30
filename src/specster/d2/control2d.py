@@ -14,6 +14,7 @@ import pandas as pd
 import specster
 from specster.core.misc import copy_directory_contents, get_executor, parallel_call
 from specster.core.parse import read_binaries_in_directory, write_directory_binaries
+from specster.core.plotting import plot_gll_data
 
 from specster.core.stations import read_stations
 
@@ -167,24 +168,40 @@ class Control2d(BaseControl):
         data = [x.dict() for x in self._read_stations()]
         return pd.DataFrame(data)
 
+    def plot_geometry(self, kernel=None):
+        """Make a plot of the material models, stations, and sources."""
+        material_df = self.get_material_model_df()
+        fig, axes = plot_gll_data(material_df, alpha=0.5, kernel=kernel)
+        station_df = self.get_station_df()
+        source_df = self.get_source_df()
+        # need to plot
+        for ax in axes:
+            ax.plot(station_df['xs'], station_df['zs'], 'v', color='k')
+            ax.plot(source_df['xs'], source_df['zs'], '*', color='r')
+        return fig, axes
 
 
-def load_2d_example(name, new_path=None) -> Control2d:
+def load_2d_example(name, new_path=None, base_path=None) -> Control2d:
     """
-    Load an example from the 2D specfem directory.
+    Load an example from specsters 2d data directory, or, if it doesn't
+    exist, specfem's example directory.
 
     Parameters
     ----------
     name
-        Example name, should be a directory in specfem2d/Examples.
+        Example name, should be a directory in specster/d2/data or
+        specfem2d/Examples.
     new_path
         The new path to copy the control files to (so original examples
         aren't modified). If none, use a temp path.
     """
+    spec_path = specster.settings.package_path / "d2" / "data" / name
     base_path = specster.settings.specfem2d_path / "EXAMPLES" / name
-    if not base_path.exists():
+    path_exists = [x for x in [spec_path, base_path] if x.exists()]
+    if not path_exists:
         msg = f"example with name {name} doesn't exist in {(base_path.parent)}"
         raise NotADirectoryError(msg)
+    base_path = path_exists[0]
     # copy all files in old base_path, not just standard files in case exteranl
     # files are used (e.g., named interfaces)
     control = Control2d(base_path).copy(new_path)

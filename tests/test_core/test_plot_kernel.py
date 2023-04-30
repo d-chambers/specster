@@ -3,7 +3,7 @@ Tests for plotting kernels.
 """
 import matplotlib.pyplot as plt
 
-from specster.core.plotting import plot_kernels
+from specster.core.plotting import plot_gll_data
 
 
 class TestPlotKernels:
@@ -11,6 +11,6 @@ class TestPlotKernels:
 
     def test_basic_plot(self, weights_kernel):
         """Test basic plots."""
-        fig, axes = plot_kernels(weights_kernel)
+        fig, axes = plot_gll_data(weights_kernel)
         assert isinstance(fig, plt.Figure)
         assert len(axes)

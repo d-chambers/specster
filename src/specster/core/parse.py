@@ -228,9 +228,15 @@ def read_ascii_kernels(path, kernel=None, coords=XYZ[:2]):
 
     df_list_out = []
     for proc, df_list in out.items():
-        df_merged = reduce(
-            lambda left, right: pd.merge(
-                left, right, on=list(coords[:2]), how='outer'), df_list
-        )
+        df_merged = reduce(_merge_dfs, df_list)
         df_list_out.append(df_merged)
     return pd.concat(df_list_out)
+
+
+def _merge_dfs(df1, df2, coords=XYZ[:2]):
+    """merge two dfs together."""
+    common_cols = (set(df1.columns) & set(df2.columns)) - set(coords)
+    if common_cols:
+        df2 = df2.drop(columns=list(common_cols))
+    out = pd.merge(df1, df2, on=list(coords), how='outer')
+    return out

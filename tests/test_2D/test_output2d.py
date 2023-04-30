@@ -4,6 +4,14 @@ Tests for 2d output object.
 import obspy
 import pandas as pd
 import pytest
+import matplotlib.pyplot as plt
+
+
+@pytest.fixture(scope='class')
+def plotting_control(modified_control, tmp_path_factory):
+    """Ensure basic plotting is completed."""
+    new_path = tmp_path_factory.mktemp("tests")
+    return modified_control.copy(new_path)
 
 
 @pytest.fixture(scope="class")
@@ -38,3 +46,25 @@ class TestBasic:
         assert len(df_liquid) and len(df_solid)
         assert isinstance(df_liquid, pd.DataFrame)
         assert isinstance(df_solid, pd.DataFrame)
+
+
+class TestPlotGLLHistograms:
+    """Plot the histograms of GLL points per wavelength."""
+
+    def test_basic_plot(self, modified_control_ran):
+        """Ensure basic plotting works of histogram."""
+        output = modified_control_ran.output
+        fig, axes = output.plot_gll_per_wavelength_histogram()
+        assert isinstance(fig, plt.Figure)
+        assert len(axes)
+
+
+@pytest.mark.slow
+class TestPlotGeometry:
+    """Tests to ensure geometry can be plotted."""
+
+    def test_basic(self, plotting_control):
+        """Ensure basic plotting is completed."""
+        fig, axes = plotting_control.plot_geometry()
+        assert isinstance(fig, plt.Figure)
+        assert len(axes)

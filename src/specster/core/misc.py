@@ -127,7 +127,7 @@ def assert_models_equal(model1, model2):
 def get_control_default_path(control: Literal["2D", "3D", None] = "2D") -> Path:
     """Get the path to the default control files."""
     if control == "2D":
-        return specster.settings.package_path / "d2" / "base_case_2d"
+        return specster.settings.package_path / "d2" / "data" / "base_case_2d"
     else:
         msg = "other controls not yet supported"
         raise ValueError(msg)
@@ -253,7 +253,8 @@ def parallel_call(funcs):
     assert not any(exceptions), "Exception raised in subprocess!"
 
 
-def run_new_par(control):
+@contextmanager
+def run_new_par(control, supress_output=False):
     """Return a new parameter object which is overwritten then run
     control and switch back.
      """
@@ -263,7 +264,7 @@ def run_new_par(control):
     control.par = new_par
     control.write(overwrite=True)
     try:
-        control.run()
+        control.run(supress_output=supress_output)
     except Exception as e:
         control.par = par_old
         control.write(overwrite=True)
