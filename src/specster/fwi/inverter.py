@@ -98,7 +98,7 @@ class Inverter:
         if not obs_data_path.is_dir():
             shutil.copytree(observed_data_path, obs_data_path)
 
-    def _run_forward(self, control_list=None):
+    def _run_controls(self, control_list=None):
         """Run one forward iteration."""
         controls = control_list or self.get_controls()
         run_list = [partial(x.run, supress_output=True) for x in controls]
@@ -126,7 +126,7 @@ class Inverter:
             self._write_adjoints_to_each_event(adjoints, control_list=controls)
             # run FWI, get aggregated kernels
             console.print(f"Running adjoints for {len(controls)} events")
-            self._run_forward(control_list=controls)
+            self._run_controls(control_list=controls)
             self._aggregate_kernels(controls)
         breakpoint()
 
@@ -158,6 +158,9 @@ class Inverter:
             kernel_conditioned = self.apply_kernel_conditioning(kernels)
             out[control.base_path.name] = kernel_conditioned
         summed = reduce(add, out.values())
+
+        from specster.core.plotting import plot_gll_data
+        plot_gll_data(summed.reset_index(), kernel='beta')
         breakpoint()
 
     def apply_kernel_conditioning(self, kernel_df):

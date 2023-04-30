@@ -20,7 +20,7 @@ def _get_regularly_sampled_coords(array):
     return out, dx
 
 
-def df_to_grid(df, column, coords=('x', 'z')):
+def df_to_grid(df, column, coords=('x', 'z'), max_dist=4):
     """Convert df to a grid of values."""
     xz = df[['x', 'z']].values
     new_coords, dx = _get_regularly_sampled_coords(xz)
@@ -34,7 +34,7 @@ def df_to_grid(df, column, coords=('x', 'z')):
     tree = cKDTree(old_coords)
     xi = _ndim_coords_from_arrays((X, Y), ndim=old_coords.shape[1])
     dists, indexes = tree.query(xi)
-    out[dists > 4*dx] = np.NaN
+    out[dists > max_dist*dx] = np.NaN
     return new_coords, out
 
 

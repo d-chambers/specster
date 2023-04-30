@@ -250,7 +250,10 @@ def parallel_call(funcs):
     futures = [client.submit(call_it, func) for func in funcs]
     wait(futures)
     exceptions = [x.exception() for x in futures]
-    assert not any(exceptions), "Exception raised in subprocess!"
+    # assert not any(exceptions), "Exception raised in subprocess!"
+    first_exception = [x for x in exceptions if x]
+    if first_exception:
+        raise first_exception[0]
 
 
 @contextmanager

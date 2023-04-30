@@ -18,6 +18,7 @@ def plot_gll_data(
         exclude=('proc',),
         kernel=None,
         alpha=None,
+        max_dist=4,
 ):
     """Plot the values in the grid."""
     non_coord_cols = set(df.columns) - set(coord_labels) - set(exclude)
@@ -27,18 +28,20 @@ def plot_gll_data(
         kernel = set(kernel)
         assert kernel.issubset(non_coord_cols)
         non_coord_cols = sorted(set(kernel) & set(non_coord_cols))
-    fig_size = (5 * len(non_coord_cols), 5)
+    fig_size = (6 * len(non_coord_cols), 6)
     fig, axes = plt.subplots(1, len(non_coord_cols), figsize=fig_size)
     if isinstance(axes, plt.Axes):
         axes = [axes]
     for non_coord_col, ax in zip(sorted(non_coord_cols), axes):
-        coords, vals = df_to_grid(df, non_coord_col, coords=coord_labels)
+        coords, vals = df_to_grid(df, non_coord_col, coords=coord_labels, max_dist=max_dist)
         extents = [min(coords[0]), max(coords[0]), min(coords[1]), max(coords[1])]
-        im = ax.imshow(vals, aspect='equal', origin='lower', extent=extents, alpha=alpha)
+        im = ax.imshow(vals, origin='lower', extent=extents, alpha=alpha)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
         ax.set_title(non_coord_col)
         ax.set_ylabel(coord_labels[1])
         ax.set_xlabel(coord_labels[0])
-        fig.colorbar(im, ax=ax, fraction=0.039, pad=0.04)
+        fig.colorbar(im, cax=cax, fraction=0.039, pad=0.04)
         _maybe_switch_axis_to_km(ax)
     plt.tight_layout()
     return fig, axes
@@ -143,12 +146,8 @@ def _maybe_switch_axis_to_km(ax: plt.Axes, max_value=10_000):
     y_diff = ylims[1] - ylims[0]
     if not (abs(x_diff) > max_value or abs(y_diff) > max_value):
         return
-    new_x_tick_labels = [str(int((float(x) / 1_000))) for x in ax.get_xticks()]
-    ax.set_xticklabels(new_x_tick_labels)
-
-    new_y_tick_labels = [str(int((float(x) / 1_000))) for x in ax.get_yticks()]
-    ax.set_yticklabels(new_y_tick_labels)
-
+    ax.xaxis.set_major_formatter(lambda x, pos: str(int(x/1_000)))
+    ax.yaxis.set_major_formatter(lambda x, pos: str(int(x / 1_000)))
     ax.set_xlabel("x (km)")
     ax.set_ylabel("z (km)")
 

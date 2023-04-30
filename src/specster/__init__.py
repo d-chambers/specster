@@ -6,4 +6,6 @@ from .d2.control2d import Control2d, load_2d_example
 from .d2.output2d import OutPut2D
 from .version import __version__
 
+from .fwi import Inverter
+
 settings = Settings()

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional, Self, List
 from concurrent.futures import wait
 
+import matplotlib.pyplot as plt
 import pandas as pd
 
 import specster
@@ -30,7 +31,7 @@ def _copy_set_source_run(control, source_index, base_path):
     new = control.copy(out_path, exclude=[base_path.name])
     # ensure only one source is set.
     new.par.sources.sources = [new.par.sources.sources[source_index]]
-    new.write()
+    new.write(overwrite=True)
     new.run(supress_output=True)
     return out_path
 
@@ -144,18 +145,18 @@ class Control2d(BaseControl):
         models to read the material models from binaries so they can be
         updated.
         """
-        if len(read_binaries_in_directory(self._data_path)):
-            return self
+        # if len(read_binaries_in_directory(self._data_path)):
+        #     return self
         self.prepare_fwi_forward()
         # since we just need the material models no need run whole thing.
         nstep_old = self.par.nstep
         self.par.nstep = 10  # we just need the velocity model to
-        self.write()
+        self.write(overwrite=True)
         self.run()  # should be fast
         # reset
         self.par.nstep = nstep_old
-        self.write()
-        self.clear_outputs()
+        self.write(overwrite=True)
+        # self.clear_outputs()
         return self
 
     def get_source_df(self):
@@ -168,9 +169,9 @@ class Control2d(BaseControl):
         data = [x.dict() for x in self._read_stations()]
         return pd.DataFrame(data)
 
-    def plot_geometry(self, kernel=None):
+    def plot_geometry(self, kernel=None, overwrite=False):
         """Make a plot of the material models, stations, and sources."""
-        material_df = self.get_material_model_df()
+        material_df = self.get_material_model_df(overwrite=overwrite)
         fig, axes = plot_gll_data(material_df, alpha=0.5, kernel=kernel)
         station_df = self.get_station_df()
         source_df = self.get_source_df()
@@ -178,6 +179,7 @@ class Control2d(BaseControl):
         for ax in axes:
             ax.plot(station_df['xs'], station_df['zs'], 'v', color='k')
             ax.plot(source_df['xs'], source_df['zs'], '*', color='r')
+        plt.tight_layout()
         return fig, axes
 
 
