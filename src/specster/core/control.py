@@ -19,14 +19,18 @@ from specster.core.misc import (
     find_data_path,
     get_control_default_path,
     load_templates_from_directory,
+    run_new_par,
 )
 from specster.core.models import SpecsterModel
 from specster.core.output import BaseOutput
+from specster.core.parse import (
+    read_binaries_in_directory,
+    write_ascii_waveforms,
+    write_directory_binaries,
+)
 from specster.core.printer import console, program_render
 from specster.core.stations import _maybe_use_station_file
-from specster.core.parse import write_ascii_waveforms, read_binaries_in_directory, write_directory_binaries
 from specster.exceptions import SpecFEMError
-from specster.core.misc import run_new_par
 
 
 class BaseControl:
@@ -40,6 +44,7 @@ class BaseControl:
     _spec_parameters = SpecsterModel
     _control_type: Optional[str] = None
     _each_source_path = "EACH_SOURCE"
+    _coord_columns = ("x", "y", "z")
 
     sources = SequenceDescriptor("par.sources.sources")
     models = SequenceDescriptor("par.material_models.models")
@@ -310,16 +315,18 @@ class BaseControl:
         self.write(overwrite=True)
         return self
 
-    def get_material_model_df(self, overwrite=False):
+    def get_material_model_df(self, overwrite=False) -> pd.DataFrame:
         """
-        Ensure the material model is written to disk.
+        Read the material model from disk.
+
+        Output dataframe has index set to spatial coords (eg x,z).
 
         If overwrite == True, force regeneration of material model
         by running mesher and specfem.
         """
         model = read_binaries_in_directory(self._data_path)
         if len(model) and not overwrite:
-            return model
+            return model.set_index(list(self._coord_columns))
         with run_new_par(self, supress_output=True) as par:
             par.simulation_type = "1"
             par.save_forward = False
@@ -328,7 +335,7 @@ class BaseControl:
             par.mesh.model = "default"
             par.nstep = 10  # limit number of steps so simulation is fast.
         model = read_binaries_in_directory(self._data_path)
-        return model
+        return model.set_index(list(self._coord_columns))
 
     def set_material_model_df(self, df):
         """
@@ -336,6 +343,10 @@ class BaseControl:
 
         Also flips needed flags so the model will be used in next run.
         """
+        # ensure cols are set to spatial coords.
+        if set(df.columns) & set(self._coord_columns):
+            df = df.set_index(list(self._coord_columns))
+        # not index is still spatial coords here; they wont update.
         write_directory_binaries(df, self._data_path)
         self.par.mesh.setup_with_binary_database = "2"
         self.par.mesh.model = "binary"

@@ -4,21 +4,21 @@ Module for plotting.
 
 import matplotlib.pyplot as plt
 import numpy as np
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import specster
 from specster.core.misc import grid
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .grid import df_to_grid
 
 
 def plot_gll_data(
-        df,
-        coord_labels=("x", "z"),
-        exclude=('proc',),
-        kernel=None,
-        alpha=None,
-        max_dist=4,
+    df,
+    coord_labels=("x", "z"),
+    exclude=("proc",),
+    kernel=None,
+    alpha=None,
+    max_dist=4,
 ):
     """Plot the values in the grid."""
     non_coord_cols = set(df.columns) - set(coord_labels) - set(exclude)
@@ -33,9 +33,11 @@ def plot_gll_data(
     if isinstance(axes, plt.Axes):
         axes = [axes]
     for non_coord_col, ax in zip(sorted(non_coord_cols), axes):
-        coords, vals = df_to_grid(df, non_coord_col, coords=coord_labels, max_dist=max_dist)
+        coords, vals = df_to_grid(
+            df, non_coord_col, coords=coord_labels, max_dist=max_dist
+        )
         extents = [min(coords[0]), max(coords[0]), min(coords[1]), max(coords[1])]
-        im = ax.imshow(vals, origin='lower', extent=extents, alpha=alpha)
+        im = ax.imshow(vals, origin="lower", extent=extents, alpha=alpha)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         ax.set_title(non_coord_col)
@@ -54,9 +56,9 @@ def plot_gll_historgrams(df, ax=None, title=""):
     These are produced by e.g., Output2D
     """
     ax = ax or plt.subplots(1, 1)
-    bin_center = (df['bin_start'] + df['bin_end']) / 2
+    bin_center = (df["bin_start"] + df["bin_end"]) / 2
     width = bin_center.diff().mean()
-    ax.bar(bin_center, df['elements'], width=width * 0.95)
+    ax.bar(bin_center, df["elements"], width=width * 0.95)
     ax.set_title(title)
     ax.set_xlabel("GLL points per shortest wavelength")
     ax.set_ylabel("# Elements")
@@ -64,12 +66,12 @@ def plot_gll_historgrams(df, ax=None, title=""):
 
 
 def plot_kernels(
-        output: "specster.OutPut2D",
-        kernel_df,
-        columns=None,
-        scale=0.15,
-        out_file=None,
-        **kwargs,
+    output: "specster.OutPut2D",
+    kernel_df,
+    columns=None,
+    scale=0.15,
+    out_file=None,
+    **kwargs,
 ):
     """
     Plot several kernels.
@@ -90,12 +92,12 @@ def plot_kernels(
 
 
 def plot_single_kernel(
-        output: "specster.OutPut2D",
-        df,
-        column,
-        ax=None,
-        scale=0.25,
-        max_stations=10,
+    output: "specster.OutPut2D",
+    df,
+    column,
+    ax=None,
+    scale=0.25,
+    max_stations=10,
 ):
     """Plot Rho, Alpha, Beta"""
     data = df[column]
@@ -111,7 +113,15 @@ def plot_single_kernel(
         fig, ax = plt.subplots(figsize=(8, 8))
 
     # plot, set labels etc.
-    im = ax.imshow(data, extent=extent, cmap="seismic_r", vmin=min_val, vmax=max_val,  origin='lower', alpha=0.5)
+    im = ax.imshow(
+        data,
+        extent=extent,
+        cmap="seismic_r",
+        vmin=min_val,
+        vmax=max_val,
+        origin="lower",
+        alpha=0.5,
+    )
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
 
@@ -124,9 +134,9 @@ def plot_single_kernel(
     source_df = output._control.get_source_df()
     station_df = output._control.get_station_df()
     if not station_df.empty and len(station_df) < max_stations:
-        ax.plot(station_df["xs"], station_df["zs"], "^", color='k')
+        ax.plot(station_df["xs"], station_df["zs"], "^", color="k")
     if not source_df.empty:
-        ax.plot(source_df["xs"], source_df["zs"], "*", color='red')
+        ax.plot(source_df["xs"], source_df["zs"], "*", color="red")
     plt.colorbar(im, cax=cax)
     ax.tick_params(axis="both", which="major", labelsize=14)
     _maybe_switch_axis_to_km(ax)
@@ -146,11 +156,7 @@ def _maybe_switch_axis_to_km(ax: plt.Axes, max_value=10_000):
     y_diff = ylims[1] - ylims[0]
     if not (abs(x_diff) > max_value or abs(y_diff) > max_value):
         return
-    ax.xaxis.set_major_formatter(lambda x, pos: str(int(x/1_000)))
+    ax.xaxis.set_major_formatter(lambda x, pos: str(int(x / 1_000)))
     ax.yaxis.set_major_formatter(lambda x, pos: str(int(x / 1_000)))
     ax.set_xlabel("x (km)")
     ax.set_ylabel("z (km)")
-
-
-
-

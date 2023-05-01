@@ -19,13 +19,16 @@ class SilentDummy:
     """A class to just swallow any attrs."""
 
     def print(self, *args, **kwargs):
+        """prints something"""
         pass
 
     def rule(self, *args, **kwargs):
+        """Create rule on screen"""
         pass
 
     @contextmanager
     def screen(self):
+        """Return dummy object for screen"""
         yield self
 
 

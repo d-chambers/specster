@@ -12,7 +12,7 @@ from specster.core.parse import read_binaries_in_directory, write_directory_bina
 test_data_path = Path(__file__).parent / "test_data" / "bin_directory"
 
 
-@pytest.fixture(scope='class')
+@pytest.fixture(scope="class")
 def bin_df():
     """Read test binaries."""
     return read_binaries_in_directory(test_data_path)
@@ -24,7 +24,7 @@ class TestParseBins:
     def test_read(self, bin_df):
         """Ensure bins are read in"""
         assert isinstance(bin_df, pd.DataFrame)
-        assert {'x', 'z', 'vs', 'vp'}.issubset(set(bin_df.columns))
+        assert {"x", "z", "vs", "vp"}.issubset(set(bin_df.columns))
 
     def test_write_bins(self, bin_df, tmp_path_factory):
         """Ensure bins can be round tripped."""

@@ -1,23 +1,23 @@
 """
 Class for inverting material properties.
 """
+import pickle
 import shutil
-from typing import Optional, Literal, Type, Union, List
+from functools import cache, partial, reduce
 from operator import add
 from pathlib import Path
-from functools import cache, partial, reduce
+from typing import List, Literal, Optional, Type, Union
 
 import numpy as np
 import pandas as pd
 
 import specster as sp
-from ..core.control import BaseControl
-from .misfit import _BaseMisFit
 from specster.core.misc import parallel_call
 from specster.core.parse import read_ascii_stream
-from specster.core.printer import program_render
+from specster.core.printer import console, program_render
 
-from specster.core.printer import console
+from ..core.control import BaseControl
+from .misfit import _BaseMisFit
 
 
 def _run_each_source(control):
@@ -56,47 +56,74 @@ class Inverter:
         Should contain directories named after sources (sequential)
         then each of these waveforms in the convention semp format.
     """
+
+    _version = "0.0.0"
     _observed_path = "OBSERVED_STREAMS"
     _iteration_dir = "ITERATIONS"
+    _control_path = "CONTROL"
+    _control_true_path = "CONTROL_TRUE"
+    _inverter_save_path = "inverter.pkl"
     _stats_columns = ("data_misfit", "model_misfit", "kernel_step")
     _scratch_path = "SCRATCH"
-    _kernels = ('alpha', 'beta')
-    _step_range = (0.001, 0.02)
+    _max_iteration_change = 0.02
+    _kernel_to_material_map = {"alpha": "vp", "beta": "vs", "rho": "rho"}
 
     def __init__(
-            self,
-            observed_data_path: Union[Path, BaseControl],
-            control: BaseControl,
-            misfit: Type[_BaseMisFit],
-            true_control: Optional[BaseControl] = None,
-            optimization: Literal['steepest descent'] = "steepest descent",
-            stream_pre_processing=None,
-            working_path="specster_scratch",
-            pre_conditioner: Literal["default"] = "default",
-            misfit_aggregator=np.linalg.norm,
+        self,
+        observed_data_path: Union[Path, BaseControl],
+        control: BaseControl,
+        misfit: Type[_BaseMisFit],
+        true_control: Optional[BaseControl] = None,
+        optimization: Literal["steepest descent"] = "steepest descent",
+        stream_pre_processing=None,
+        working_path="specster_scratch",
+        pre_conditioner: Literal["default"] = "default",
+        misfit_aggregator=np.linalg.norm,
+        kernels=("alpha", "beta"),
     ):
         # set input params
         if isinstance(observed_data_path, BaseControl):
             observed_data_path = observed_data_path.each_source_path
 
         self._misfit = misfit
-        self._true_control = true_control
         self._optimization = optimization
         self._stream_pre_process = stream_pre_processing
         self.working_path = Path(working_path)
-        new_control = control.copy(self.working_path)
-        self._control = _run_each_source(new_control)
-        self._create_working_directory(observed_data_path)
+        self._control, self._true_control = self._create_working_directory(
+            observed_data_path,
+            control,
+            true_control,
+        )
         self._df = pd.DataFrame(columns=list(self._stats_columns))
         self._misfit_aggregator = misfit_aggregator
-        self._true_model = self._maybe_load_true_model()
+        self._kernel_names = kernels
 
-    def _create_working_directory(self, observed_data_path):
-        """Create a working directory with observed/synthetic data."""
+    def _create_working_directory(
+        self,
+        observed_data_path,
+        control_initial,
+        control_true,
+    ):
+        """
+        Create a working directory with observed/synthetic data and
+        copy true and initial control data.
+        """
         # copy observed data
         obs_data_path = self.working_path / self._observed_path
-        if not obs_data_path.is_dir():
-            shutil.copytree(observed_data_path, obs_data_path)
+        if not obs_data_path.exists():
+            waveform_paths = sorted(observed_data_path.rglob("*semd"))
+            assert len(waveform_paths), f"No waveforms in {observed_data_path}"
+            for waveform_path in waveform_paths:
+                new_path = obs_data_path / waveform_path.relative_to(observed_data_path)
+                new_path.parent.mkdir(exist_ok=True, parents=True)
+                shutil.copy2(waveform_path, new_path)
+        control = control_initial.copy(self.working_path / self._control_path)
+        _run_each_source(control)
+        if control_true is not None:
+            control_true = control_true.copy(
+                self.working_path / self._control_true_path
+            )
+        return control, control_true
 
     def _run_controls(self, control_list=None):
         """Run one forward iteration."""
@@ -104,15 +131,45 @@ class Inverter:
         run_list = [partial(x.run, supress_output=True) for x in controls]
         parallel_call(run_list)
 
-    def run_inversion_iteration(self):
+    def save_checkpoint(self):
+        """Pickle the inverter into the working directory"""
+        # This is just a sloppy hack until I have time to work on
+        # a better serialization format
+        path = self.working_path / self._inverter_save_path
+        with open(path, "wb") as fi:
+            pickle.dump(self, fi)
+
+    @property
+    @cache
+    def _true_model(self):
+        if self._true_control:
+            return self._true_control.get_material_model_df()
+        return None
+
+    @classmethod
+    def load_inverter(cls, path):
+        """Load the pickled inverter"""
+        path = Path(path)
+        name = cls._inverter_save_path
+        path = path if name in path.name else path / name
+        if not path.exists():
+            raise FileNotFoundError(f"{path} does not exist!")
+        out: Inverter = pd.read_pickle(path)
+        base_path = path.parent
+        # need to fix paths in case this was copied from elsewhere.
+        out._control = sp.Control2d(base_path / out._control_path)
+        if (base_path / out._control_true_path).exists():
+            out._true_control = sp.Control2d(base_path / out._control_true_path)
+        return out
+
+    def run_iteration(self):
         """
         Run the inversion iteratively.
         """
-        iteration_str = f"Iteration {len(self._df) + 1:d}"
+        iteration = len(self._df) + 1
+        iteration_str = f"Iteration {iteration:d}"
         with program_render(console, title=f"FWI {iteration_str}", supress_output=True):
-            console.rule(
-                f"[bold red]Running fwi inversion {iteration_str}"
-            )
+            console.rule(f"[bold red]Running FWI ({self.working_path}) {iteration_str}")
             # add new row to tracking df.
             self._df = pd.concat(
                 [self._df, pd.DataFrame(columns=list(self._stats_columns))]
@@ -122,46 +179,47 @@ class Inverter:
             current_streams = self._get_current_event_streams()
             misfit, adjoints = self._calc_misfit_adjoints(current_streams)
             console.print(f"Data misfit is {misfit}")
-            self._df.loc[len(self._df) - 1, 'data_misfit'] = misfit
+            self._df.loc[len(self._df) - 1, "data_misfit"] = misfit
             self._write_adjoints_to_each_event(adjoints, control_list=controls)
             # run FWI, get aggregated kernels
             console.print(f"Running adjoints for {len(controls)} events")
             self._run_controls(control_list=controls)
-            self._aggregate_kernels(controls)
+            console.print(f"Summing kernels for {len(controls)} events")
+            kernels = self._aggregate_kernels(controls)
+            self._save_iteration_kernels(kernels, iteration)
+            console.print(f"Conducting line search to find gradient scaling")
+            current_material_df = self._control.get_material_model_df()
+            lam = self._linesearch_alpha(kernels, current_material_df)
+
+    def _linesearch_alpha(self, kernels, material_df):
+        """Find the optimal update for line search."""
+        k_df = kernels.rename(columns=self._kernel_to_material_map)
+        m_df = material_df.loc[:, k_df.columns]
         breakpoint()
 
-        # run each
+    def _save_iteration_kernels(self, kernel: pd.DataFrame, iteration):
+        """Save the kernels to disk in the appropriate iteration."""
+        it_dir = self._get_iteration_directory(iteration)
+        path = it_dir / "iteration_kernel.parquet"
+        kernel.to_parquet(path)
 
-        control.run()
-        output = control.output
-        output.load_kernel()
-        pp = get_executor()
-        out = pp.map(_run_controls, sub_controls)
-        #
-        # if not len(initial_st):  # need to run initial control
-        #     self.initial_control.run()
-        #     initial_st = self.initial_control.output.get_waveforms()
-        #     assert len(initial_st)
-        #
-        # initial_misfit = self._calc_misfit_adjoints(current_st_list=initial_st)
-        return self
+    def _load_iteration_kernels(self, iteration):
+        """Save the kernels to disk in the appropriate iteration."""
+        it_dir = self._get_iteration_directory(iteration)
+        path = it_dir / "iteration_kernel.parquet"
+        return pd.read_parquet(path)
 
     def _aggregate_kernels(self, control_list=None):
         """
-        Load each of the kernels, apply preconditioning, sum, and save
-        to disk.
+        Load each of the kernels, apply preconditioning, sum, and
+        return.
         """
         controls = control_list or self.get_controls()
         out = {}
         for control in controls:
-            kernels = control.output.load_kernel().set_index(['z', 'x'])
-            kernel_conditioned = self.apply_kernel_conditioning(kernels)
-            out[control.base_path.name] = kernel_conditioned
-        summed = reduce(add, out.values())
-
-        from specster.core.plotting import plot_gll_data
-        plot_gll_data(summed.reset_index(), kernel='beta')
-        breakpoint()
+            kernels = control.output.load_kernel().pipe(self.apply_kernel_conditioning)
+            out[control.base_path.name] = kernels
+        return reduce(add, out.values())
 
     def apply_kernel_conditioning(self, kernel_df):
         """
@@ -170,8 +228,8 @@ class Inverter:
         By default this is just multiplying the hessian.
         """
         new = pd.DataFrame(index=kernel_df.index)
-        hess_1 = kernel_df['Hessian1']
-        for kname in self._kernels:
+        hess_1 = kernel_df["Hessian1"]
+        for kname in self._kernel_names:
             new[kname] = kernel_df[kname] / hess_1
         return new
 
@@ -188,15 +246,19 @@ class Inverter:
         ]
         return current_streams
 
-    def _save_adjoints(self, adjoints):
-        """Save adjoints back to disk."""
-
     def get_controls(self) -> List[sp.Control2d]:
         """Get a control2d for each event."""
         out = []
         for path in sorted(self._control.each_source_path.iterdir()):
             out.append(sp.Control2d(path))
         return out
+
+    def _get_iteration_directory(self, iteration):
+        """Get the directory for saving info on each iteration."""
+        it_dir = Path(self.working_path) / self._iteration_dir
+        path = it_dir / f"{iteration:06d}"
+        path.mkdir(exist_ok=True, parents=True)
+        return path
 
     def _calc_misfit_adjoints(self, current_st_list, include_adjoint=True):
         """Calculate the misfit and adjoints."""
@@ -214,12 +276,13 @@ class Inverter:
     def _preprocess_stream(self, st):
         """Pre-process the stream"""
         if not callable(self._stream_pre_process):
-            return st.detrend('linear').taper(0.5)
+            return st.detrend("linear").taper(0.5)
         else:
             return self._stream_pre_process(st)
 
     @property
-    def iteration_path(self):
+    def iteration_data_path(self):
+        """Get the path to iteration data"""
         path = self.working_path / self._iteration_dir
         path.mkdir(exist_ok=True, parents=True)
         return path
@@ -234,15 +297,9 @@ class Inverter:
     @cache
     def _st_obs_list(self):
         st_obs_list = [
-            self._preprocess_stream(x) for x in
-            _get_streams_from_each_source_dir(
+            self._preprocess_stream(x)
+            for x in _get_streams_from_each_source_dir(
                 self.working_path / self._observed_path
             )
         ]
         return st_obs_list
-
-    def _maybe_load_true_model(self):
-        """If a true control is used, load model."""
-        if self._true_control:
-            return self._true_control.get_material_model_df()
-        return None

@@ -5,7 +5,7 @@ import copy
 import re
 import shutil
 from concurrent.futures import ProcessPoolExecutor, wait
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from functools import cache
 from pathlib import Path
 from typing import Dict, Literal, Optional, Union
@@ -240,7 +240,7 @@ def get_executor():
 
 
 def call_it(call):
-    """Dummy function to call thing passed in """
+    """Dummy function to call thing passed in"""
     return call()
 
 
@@ -260,7 +260,7 @@ def parallel_call(funcs):
 def run_new_par(control, supress_output=False):
     """Return a new parameter object which is overwritten then run
     control and switch back.
-     """
+    """
     par_old = copy.deepcopy(control.par)
     new_par = copy.deepcopy(control.par)
     yield new_par
@@ -274,9 +274,3 @@ def run_new_par(control, supress_output=False):
         raise e
     control.par = par_old
     control.write(overwrite=True)
-
-
-
-
-
-

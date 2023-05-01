@@ -1,14 +1,12 @@
 """
 Output for 2D simulations.
 """
-import operator
 import re
-from functools import cache, cached_property, reduce
+from functools import cache, cached_property
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Self, Tuple
+from typing import List, Literal, Optional, Self, Tuple
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 from pydantic import Field
 
@@ -129,14 +127,20 @@ class SPECFEM2DStats(SpecsterModel):
         """Return a dict of specfem data."""
         out = dict(
             mpi_slices=match_between(txt, "total of", "slices", 1),
-            receiver_count=match_between(txt, "found a total of", "receivers", default=-1),
+            receiver_count=match_between(
+                txt, "found a total of", "receivers", default=-1
+            ),
             spec_duration=match_between(txt, "time of the system :", "s"),
             max_cfl=match_between(txt, r"must be below about 0.50 or so"),
             elements=match_between(txt, "number of elements:", default=-1),
             regular_elements=match_between(txt, "of which", "are regular elements"),
             pml_elements=match_between(txt, "and ", "are PML elements"),
-            acoustic_elements=match_between(txt, "of acoustic elements           =", default=-1),
-            elastic_elements=match_between(txt, "of elastic/visco/poro elements =", default=-1),
+            acoustic_elements=match_between(
+                txt, "of acoustic elements           =", default=-1
+            ),
+            elastic_elements=match_between(
+                txt, "of elastic/visco/poro elements =", default=-1
+            ),
             max_grid_size=match_between(txt, "Max grid size =", default=-1),
             min_grid_size=match_between(txt, "Min grid size =", default=-1),
             min_gll_distance=match_between(txt, "Minimum GLL point distance  ="),
@@ -248,11 +252,13 @@ class OutPut2D(BaseOutput):
 
     @cache
     def load_kernel(
-            self,
-            kernel=None,
+        self,
+        kernel=None,
     ) -> pd.DataFrame:
         """Load a kernel into memory."""
-        return read_ascii_kernels(self.path, kernel)
+        coords = list(self._control._coord_columns)
+        return read_ascii_kernels(self.path, kernel).set_index(coords)
+
     #
     # plot_kernels = plot_kernels
     # plot_single_kernel = plot_single_kernel

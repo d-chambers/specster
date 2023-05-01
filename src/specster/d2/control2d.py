@@ -6,17 +6,14 @@ from __future__ import annotations
 import shutil
 from functools import partial
 from pathlib import Path
-from typing import Optional, Self, List
-from concurrent.futures import wait
+from typing import List, Optional, Self
 
 import matplotlib.pyplot as plt
 import pandas as pd
 
 import specster
-from specster.core.misc import copy_directory_contents, get_executor, parallel_call
-from specster.core.parse import read_binaries_in_directory, write_directory_binaries
+from specster.core.misc import copy_directory_contents, parallel_call
 from specster.core.plotting import plot_gll_data
-
 from specster.core.stations import read_stations
 
 from ..core.control import BaseControl
@@ -44,6 +41,7 @@ class Control2d(BaseControl):
     _spec_parameters = SpecParameters2D
     _template_path = Path(__file__).parent / "templates"
     _control_type = "2D"
+    _coord_columns = ("z", "x")
 
     def get_input_paths(self) -> dict[str, Path]:
         """
@@ -68,7 +66,7 @@ class Control2d(BaseControl):
     def each_source_output(self) -> List[OutPut2D]:
         """Return an output for each source."""
         sorted_event_paths = sorted(x for x in self.each_source_path.iterdir())
-        return [OutPut2D(x/"OUTPUT_FILES", self) for x in sorted_event_paths]
+        return [OutPut2D(x / "OUTPUT_FILES", self) for x in sorted_event_paths]
 
     def run(self, output_path: Optional[Path] = None, supress_output=False) -> OutPut2D:
         """Run the simulation."""
@@ -101,10 +99,8 @@ class Control2d(BaseControl):
         base_path = self.base_path / path
         callables = [
             partial(
-                _copy_set_source_run,
-                control=self,
-                source_index=i,
-                base_path=base_path)
+                _copy_set_source_run, control=self, source_index=i, base_path=base_path
+            )
             for i in range(len(sources))
         ]
         parallel_call(callables)
@@ -177,8 +173,8 @@ class Control2d(BaseControl):
         source_df = self.get_source_df()
         # need to plot
         for ax in axes:
-            ax.plot(station_df['xs'], station_df['zs'], 'v', color='k')
-            ax.plot(source_df['xs'], source_df['zs'], '*', color='r')
+            ax.plot(station_df["xs"], station_df["zs"], "v", color="k")
+            ax.plot(source_df["xs"], source_df["zs"], "*", color="r")
         plt.tight_layout()
         return fig, axes
 

@@ -1,16 +1,15 @@
 """
 Utils module to help parse specfem files.
 """
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict
-from collections import defaultdict
-from functools import reduce
 
 import numpy as np
 import obspy
 import pandas as pd
 
-from specster.constants import _SUB_VALUES, XYZ, IGNORE_BINS
+from specster.constants import _SUB_VALUES, IGNORE_BINS, XYZ
 
 
 def extract_parline_key_value(line):
@@ -45,10 +44,10 @@ def read_binaries_in_directory(path) -> pd.DataFrame:
     """
     out = defaultdict(dict)
 
-    for bin_path in Path(path).glob('proc*.bin'):
+    for bin_path in Path(path).glob("proc*.bin"):
         name = bin_path.name
-        proc = int(name.split('_')[0].replace("proc", ""))
-        field_name = "".join(name.split('_')[1:]).replace('.bin', '')
+        proc = int(name.split("_")[0].replace("proc", ""))
+        field_name = "".join(name.split("_")[1:]).replace(".bin", "")
         if field_name in IGNORE_BINS:
             continue
         array = read_specfem_binary(bin_path)
@@ -206,7 +205,7 @@ def write_ascii_waveforms(tr, filename):
 
 
 def read_ascii_kernels(path, kernel=None, coords=XYZ[:2]):
-    """Read all kernels in directory. """
+    """Read all kernels in directory."""
     coords = list(coords)
     kernel_paths = sorted(Path(path).glob("*kernel.dat"))
     if kernel:
@@ -216,27 +215,18 @@ def read_ascii_kernels(path, kernel=None, coords=XYZ[:2]):
 
     for kernel_path in kernel_paths:
         name = kernel_path.name
-        proc = int(name.split('_')[0].replace("proc", ""))
-        field_names = coords + name.split('_')[1:-1]
+        proc = int(name.split("_")[0].replace("proc", ""))
+        field_names = coords + name.split("_")[1:-1]
         df = pd.read_csv(
             kernel_path, delim_whitespace=True, names=field_names, header=None
         )
-        df["proc"] = proc
-        out[proc].append(df)
+        out[proc].append(df.set_index(coords))
 
     # merge each process on coords
-
     df_list_out = []
     for proc, df_list in out.items():
-        df_merged = reduce(_merge_dfs, df_list)
+        df_merged = pd.concat(df_list, axis="columns")
+        df_merged["proc"] = proc
+        assert len(df_merged) == len(df_list[0])
         df_list_out.append(df_merged)
-    return pd.concat(df_list_out)
-
-
-def _merge_dfs(df1, df2, coords=XYZ[:2]):
-    """merge two dfs together."""
-    common_cols = (set(df1.columns) & set(df2.columns)) - set(coords)
-    if common_cols:
-        df2 = df2.drop(columns=list(common_cols))
-    out = pd.merge(df1, df2, on=list(coords), how='outer')
-    return out
+    return pd.concat(df_list_out, axis=0)

@@ -1,22 +1,21 @@
 """
 Tests for control class.
 """
+import copy
 import shutil
 from pathlib import Path
-import copy
 
 import pytest
 
 import specster as sp
-from specster.core.misc import assert_models_equal
-from specster.d2.control2d import load_2d_example
+from specster.core.misc import assert_models_equal, load_cache
 from specster.core.parse import read_binaries_in_directory
-from specster.core.misc import load_cache
+from specster.d2.control2d import load_2d_example
 
 
-@pytest.fixture(scope='class')
+@pytest.fixture(scope="class")
 def initial_control_only_data(initial_control, tmp_path_factory):
-    """Create an initial """
+    """Create an initial"""
     cache_name = "control_2d_default_3_sources"
     path = load_cache(cache_name)
     if not path:
@@ -104,12 +103,12 @@ class TestReadWriteModel:
     def test_round_trip_model(self, initial_control_only_data):
         """Ensure we can read velocity/density into memory."""
         df = initial_control_only_data.get_material_model_df()
-        df['vp'] = df['vp'] * 1.2
+        df["vp"] = df["vp"] * 1.2
         initial_control_only_data.set_material_model_df(df)
         df2 = initial_control_only_data.get_material_model_df()
         assert df.equals(df2)
 
-    @pytest.mark.slow
+    # @pytest.mark.slow
     def test_update_models_used(self, initial_control_only_data):
         """Ensure we can read velocity/density into memory."""
         control = initial_control_only_data
@@ -119,8 +118,8 @@ class TestReadWriteModel:
         st_initial = control.output.get_waveforms()
         # load model and change velocities, make sure streams change
         df = control.get_material_model_df()
-        df['vp'] = df['vp'] * 1.1
-        df['vs'] = df['vs'] * 1.1
+        df["vp"] = df["vp"] * 1.1
+        df["vs"] = df["vs"] * 1.1
         control.set_material_model_df(df)
         control.run()
         st_next = control.output.get_waveforms()

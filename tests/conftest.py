@@ -1,8 +1,8 @@
 """
 Configuration for specster 2D tests.
 """
-import os
 import copy
+import os
 import shutil
 from functools import cache
 from pathlib import Path
@@ -11,9 +11,8 @@ import pytest
 
 import specster
 import specster.d2.io.parfile as pf
+from specster.core.misc import cache_file_or_dir, find_file_startswith, load_cache
 from specster.core.parse import read_ascii_kernels
-from specster.core.misc import find_file_startswith
-from specster.core.misc import cache_file_or_dir, load_cache
 
 TEST_PATH = Path(__file__).absolute().parent
 
@@ -47,14 +46,15 @@ def pytest_sessionstart(session):
 
 
 def pytest_collection_modifyitems(config, items):
+    """Make slow marked tests only run when selected."""
     keywordexpr = config.option.keyword
     markexpr = config.option.markexpr
     if keywordexpr or markexpr:
         return  # let pytest handle this
 
-    skip_mymarker = pytest.mark.skip(reason='slow not selected')
+    skip_mymarker = pytest.mark.skip(reason="slow not selected")
     for item in items:
-        if 'slow' in item.keywords:
+        if "slow" in item.keywords:
             item.add_marker(skip_mymarker)
 
 
@@ -64,14 +64,16 @@ def test_data_path():
     return TEST_DATA_PATH
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def kernel_2d_dir_path():
     """Return a path to the kernel directory."""
-    return Path(__file__).parent / "test_2D" / "test_data" / 'kernels'
+    return Path(__file__).parent / "test_2D" / "test_data" / "kernels"
 
-@pytest.fixture(scope='class')
+
+@pytest.fixture(scope="class")
 def weights_kernel(kernel_2d_dir_path):
     return read_ascii_kernels(kernel_2d_dir_path, "weights")
+
 
 @cache
 def get_data_directories():
@@ -172,7 +174,7 @@ def modified_control_ran(modified_control):
     return modified_control
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def control_2d_default_3_sources(control_2d_default, tmp_path_factory):
     """Tests for running control 2d with 3 sources in parallel."""
     cache_name = "control_2d_default_3_sources"
@@ -215,6 +217,41 @@ def initial_control(control_2d_default_3_sources):
     else:
         control = specster.Control2d(load_cache(cache_name))
     return control
+
+
+@pytest.fixture(scope="session")
+def control_2d_inclusion_inversion(tmp_path_factory):
+    """Tests for running control 2d with 3 sources in parallel."""
+    cache_name = "inverter_2d_inclusion"
+    if not load_cache(cache_name):
+        path = tmp_path_factory.mktemp("temp_inversion_path")
+        control_true = specster.load_2d_example("inclusion_2d")
+        control_true.prepare_fwi_forward().run_each_source()
+
+        # set model number 2 to have the same properties as mod 1
+        # this homogenises the model
+        control_initial = control_true.copy()
+        models = control_initial.par.material_models.models
+        models[1].Vs = models[0].Vs
+        models[1].Vp = models[0].Vp
+        models[1].rho = models[0].rho
+        control_initial.write(overwrite=True)
+        control_initial.run_each_source()
+
+        inverter = specster.Inverter(
+            observed_data_path=control_true.base_path / "EACH_SOURCE",
+            control=control_initial,
+            true_control=control_true,
+            working_path=path,
+            misfit=specster.fwi.WaveformMisFit,
+        )
+        inverter.save_checkpoint()
+        cache_file_or_dir(path, cache_name)
+    copy_path = tmp_path_factory.mktemp(cache_name) / "inverter"
+    cache_path = load_cache(cache_name)
+    shutil.copytree(cache_path, copy_path)
+    inverter = specster.Inverter.load_inverter(copy_path)
+    return inverter
 
 
 @pytest.fixture()

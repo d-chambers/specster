@@ -61,4 +61,3 @@ factor                          = 7.5d9  # amplification factor
 ## Moving source parameters
 vx                              = 0  # Horizontal source velocity (m/s)
 vz                              = 0  # Vertical source velocity (m/s)
-

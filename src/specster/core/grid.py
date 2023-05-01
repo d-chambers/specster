@@ -5,10 +5,10 @@ Useful for converting to/from GLL binary fromat and regular
 rectangular format (hopefully with minimal loss).
 """
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator, NearestNDInterpolator
+from scipy.interpolate import NearestNDInterpolator
+from scipy.interpolate.interpnd import _ndim_coords_from_arrays
 from scipy.spatial import cKDTree
 
-from scipy.interpolate.interpnd import _ndim_coords_from_arrays
 
 def _get_regularly_sampled_coords(array):
     """Get extrapolate array into regularly sampled coords."""
@@ -20,9 +20,9 @@ def _get_regularly_sampled_coords(array):
     return out, dx
 
 
-def df_to_grid(df, column, coords=('x', 'z'), max_dist=4):
+def df_to_grid(df, column, coords=("x", "z"), max_dist=4):
     """Convert df to a grid of values."""
-    xz = df[['x', 'z']].values
+    xz = df[["x", "z"]].values
     new_coords, dx = _get_regularly_sampled_coords(xz)
     old_coords = df[list(coords)].values
     X, Y = np.meshgrid(*new_coords)
@@ -34,7 +34,7 @@ def df_to_grid(df, column, coords=('x', 'z'), max_dist=4):
     tree = cKDTree(old_coords)
     xi = _ndim_coords_from_arrays((X, Y), ndim=old_coords.shape[1])
     dists, indexes = tree.query(xi)
-    out[dists > max_dist*dx] = np.NaN
+    out[dists > max_dist * dx] = np.NaN
     return new_coords, out
 
 
@@ -42,9 +42,5 @@ def grid_to_df(grid_coords, values, df_coords):
     """
     Go back from a grid to a dataframe (list-like) coords.
     """
-    inter = RegularGridInterpolator(grid_coords, values)
-    breakpoint()
-
-
-
-
+    # inter = RegularGridInterpolator(grid_coords, values)
+    # # breakpoint()

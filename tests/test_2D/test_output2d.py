@@ -1,13 +1,13 @@
 """
 Tests for 2d output object.
 """
+import matplotlib.pyplot as plt
 import obspy
 import pandas as pd
 import pytest
-import matplotlib.pyplot as plt
 
 
-@pytest.fixture(scope='class')
+@pytest.fixture(scope="class")
 def plotting_control(modified_control, tmp_path_factory):
     """Ensure basic plotting is completed."""
     new_path = tmp_path_factory.mktemp("tests")
