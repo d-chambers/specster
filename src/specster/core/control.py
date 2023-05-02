@@ -244,7 +244,9 @@ class BaseControl:
     def _run_spec_command(self, command: str, bin_path, supress=False):
         """Run a specfem command."""
         render = program_render(
-            console, title=command, supress_output=supress,
+            console,
+            title=command,
+            supress_output=supress,
             path=self.base_path,
         )
         with render as (con, _):
@@ -387,5 +389,5 @@ class BaseControl:
 
     def clear_output_traces(self):
         """Clear the output traces as to ensure new ones are generated."""
-        for path in self.output_path.rglob('*semd'):
+        for path in self.output_path.rglob("*semd"):
             path.unlink()

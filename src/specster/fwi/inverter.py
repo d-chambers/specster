@@ -3,20 +3,24 @@ Class for inverting material properties.
 """
 import pickle
 import shutil
+import time
 from functools import cache, partial, reduce
 from operator import add
 from pathlib import Path
-from typing import List, Literal, Optional, Type, Union, Dict
+from typing import Dict, List, Literal, Optional, Type, Union
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.optimize import curve_fit
 
 import specster as sp
 from specster.core.misc import parallel_call
-from specster.core.parse import read_ascii_stream
-from specster.core.printer import console, program_render
 from specster.core.models import SpecsterModel
+from specster.core.parse import read_ascii_stream
+from specster.core.plotting import plot_gll_data
+from specster.core.preconditioner import median_filter
+from specster.core.printer import console, program_render
+from specster.exceptions import FailedLineSearch
 
 from ..core.control import BaseControl
 from .misfit import _BaseMisFit
@@ -49,17 +53,16 @@ def _run_controls(control: sp.Control2d):
 
 def _parabola(x, a, b):
     # Curve fitting function
-    return a * x ** 2 + b
+    return a * x**2 + b
 
 
 class IterationResults(SpecsterModel):
+    """A simple model for storing results from each iteration."""
+
     iteration: int
     data_misfit: float
-    module_misfit: Dict[str, float]
+    model_misfit: Dict[str, float]
     gradient_scalar: float
-
-
-
 
 
 class Inverter:
@@ -81,6 +84,7 @@ class Inverter:
     _control_true_path = "CONTROL_TRUE"
     _inverter_save_path = "inverter.pkl"
     _scratch_path = "SCRATCH"
+    _iteration_kernel_file_name = "iteration_kernel.parquet"
     _max_iteration_change = 0.02
     _linesearch_points = 4
     _material_model_file_name = "materials.parquet"
@@ -115,6 +119,7 @@ class Inverter:
         self._misfit_aggregator = misfit_aggregator
         self._kernel_names = kernels
         self.iteration_results = []
+        self.save_checkpoint()
 
     def _create_working_directory(
         self,
@@ -188,8 +193,12 @@ class Inverter:
         iteration = len(self.iteration_results) + 1
         iteration_str = f"Iteration {iteration:d}"
         with program_render(console, title=f"FWI {iteration_str}", supress_output=True):
+            start_time = time.time()
             console.rule(f"[bold red]Running FWI ({self.working_path}) {iteration_str}")
             controls = self.get_controls()  # controls for each event
+            console.print("Running forward FWI mode")
+            self._prep_controls_forward_use_model(controls)
+            self._run_controls(controls)
             # get adjoints for current data, update misfit and write adjoints.
             c_streams = self._get_current_event_streams()
             misfit, adjoints = self._calc_misfit_adjoints(c_streams)
@@ -201,10 +210,10 @@ class Inverter:
             console.print(f"Summing kernels for {len(controls)} events")
             kernels = self._aggregate_kernels(controls)
             self._save_iteration_kernels(kernels, iteration)
-            console.print(f"Conducting line search to find gradient scaling")
+            console.print("Conducting line search to find gradient scaling")
             current_material_df = self._control.get_material_model_df()
             self._write_material_df(current_material_df, iteration)
-            grad_scale, new_model = self._linesearch_alpha(
+            grad_scale, new_model = self._line_search(
                 kernels,
                 current_material_df,
                 misfit,
@@ -212,8 +221,7 @@ class Inverter:
             )
             maybe_model_misfit = self._calc_model_misfit(new_model)
             self._broadcast_model_updates(new_model)
-            self.save_checkpoint()
-            console.print(f"Finished iteration, saving state.")
+
             result = IterationResults(
                 iteration=iteration,
                 data_misfit=misfit,
@@ -221,20 +229,30 @@ class Inverter:
                 gradient_scalar=grad_scale,
             )
             self.iteration_results.append(result)
+            self.save_checkpoint()
+            duration = time.time() - start_time
+            console.rule(f"Finished iteration in {duration:.02f} seconds")
+        return self
 
-    def _linesearch_alpha(self, kernels, material_df, current_misfit, controls=None):
+    def _line_search(self, kernels, material_df, current_misfit, controls=None):
         """Find the optimal update for line search."""
+
+        def _get_lambda(coefs, trial_lambdas):
+            (c1, c2, c3) = coefs
+            bl = -c2 / (2 * c1)
+            bl = bl if bl < trial_lambdas.max() else trial_lambdas.max()
+            if bl <= trial_lambdas.min():
+                msg = "failed line search!"
+                raise FailedLineSearch(msg)
+            return bl
+
         controls = controls or self.get_controls()
-        procs = material_df['proc']
-        k_df = (
-            kernels.rename(columns=self._kernel_to_material_map)
-        )
+        procs = material_df["proc"]
+        k_df = kernels.rename(columns=self._kernel_to_material_map)
         m_df = material_df.loc[:, list(k_df.columns)]
         model_norm = m_df.max()
         kernel_norm = k_df.max()
-
         normed_kernels = k_df / kernel_norm
-
         scaled_alpha = self._max_iteration_change / self._linesearch_points
         trial_lambdas = np.arange(0, self._linesearch_points + 1) * scaled_alpha
         results = np.zeros_like(trial_lambdas)
@@ -244,26 +262,20 @@ class Inverter:
                 continue
             delta = -normed_kernels * model_norm * trial_lambda
             new_model = m_df + delta.values
-            new_model['proc'] = procs.values
-            self._broadcast_model_updates(
-                new_model,
-                controls,
-                include_base=False
-            )
+            new_model["proc"] = procs.values
+            self._broadcast_model_updates(new_model, controls, include_base=False)
             self._prep_controls_forward_use_model(controls)
             self._run_controls(control_list=controls)
             streams = self._get_current_event_streams()
             misfit, _ = self._calc_misfit_adjoints(streams, include_adjoint=False)
             results[index] = misfit
-        (c1, c2, c3) = np.polyfit(trial_lambdas, results, 2)
-        # new = trial_lambdas**2 * c1 + trial_lambdas * c2 + c3
-        # new = _parabola(trial_lambdas, a, b)
-        best_lambda = -c2/(2*c1)
-        gradient_scalar = - best_lambda * model_norm
+        coefs = np.polyfit(trial_lambdas, results, 2)
+        best_lambda = _get_lambda(coefs, trial_lambdas)
+        gradient_scalar = -best_lambda * model_norm
         final_delta = -normed_kernels * model_norm * best_lambda
-        return gradient_scalar, m_df + final_delta.values
-
-
+        new_model = m_df + final_delta.values
+        new_model["proc"] = procs.values
+        return gradient_scalar, new_model
 
     def _prep_controls_forward_use_model(self, controls=None):
         """Prepare all the controls for a forward run using model databases."""
@@ -280,12 +292,12 @@ class Inverter:
             control.set_material_model_df(model)
             # breakpoint()
         if include_base:
-            self._control.set_material_model(model)
+            self._control.set_material_model_df(model)
 
     def _save_iteration_kernels(self, kernel: pd.DataFrame, iteration):
         """Save the kernels to disk in the appropriate iteration."""
         it_dir = self._get_iteration_directory(iteration)
-        path = it_dir / "iteration_kernel.parquet"
+        path = it_dir / self._iteration_kernel_file_name
         kernel.to_parquet(path)
 
     def _load_iteration_kernels(self, iteration):
@@ -313,10 +325,13 @@ class Inverter:
         By default this is just multiplying the hessian, then smoothing
         around the stations.
         """
-        new = pd.DataFrame(index=kernel_df.index)
+        station_df = self._control.get_station_df()
+        new = pd.DataFrame(index=kernel_df.index).pipe(
+            median_filter, station_df=station_df
+        )
         hess_1 = kernel_df["Hessian1"]
         for kname in self._kernel_names:
-            smooth = kernel_df[kname] / hess_1
+            smooth = kernel_df[kname] / hess_1.values
             new[kname] = smooth
         return new
 
@@ -375,12 +390,6 @@ class Inverter:
         return path
 
     @property
-    def scratc_path(self):
-        path = self.working_path / self._scratch_path
-        path.mkdir(exist_ok=True, parents=True)
-        return path
-
-    @property
     @cache
     def _st_obs_list(self):
         st_obs_list = [
@@ -400,8 +409,40 @@ class Inverter:
         """Calc L2 norm for current and true model."""
         true_mod = self._true_model
         if true_mod is None:
-            return np.NaN
+            return {}
         sub = true_mod[new_model.columns]
         l2_norm = np.linalg.norm(sub.values - new_model.values, axis=0)
         out = {col: norm for col, norm in zip(new_model.columns, l2_norm)}
+        out.pop("proc", None)
         return out
+
+    def plot_model_update(self, iteration):
+        """Plot the model updates for a specific iteration."""
+        base_path = self._get_iteration_directory(iteration)
+        path = base_path / self._iteration_kernel_file_name
+        assert path.exists()
+        df = pd.read_parquet(path)
+        return plot_gll_data(df)
+
+    def plot_model(self, iteration):
+        """Plot the model before a certain iteration."""
+        base_path = self._get_iteration_directory(iteration)
+        path = base_path / self._material_model_file_name
+        assert path.exists()
+        df = pd.read_parquet(path)
+        return plot_gll_data(df)
+
+    def plot_data_misfit(self):
+        """Plot data misfit through the inversion."""
+        fig, ax = plt.subplots(1, 1)
+        iterations = range(len(self.iteration_results))
+        misfit = [x.data_misfit for x in iterations]
+        ax.plot(iterations, misfit)
+        ax.set_xlabel("iterations")
+        ax.set_ylabel("data misfit")
+
+    def plot_model_misfit(self):
+        """Make a plot of the misfit of the model through iterations."""
+        # fig, ax = plt.subplots(1, 1)
+        # iterations = range(len(self.iteration_results))
+        # df = pd.DataFrame([dict(x.data_misfit) for x in self.iteration_results])

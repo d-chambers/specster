@@ -19,6 +19,7 @@ def plot_gll_data(
     kernel=None,
     alpha=None,
     max_dist=4,
+    ax=None,
 ):
     """Plot the values in the grid."""
     if not set(coord_labels) & set(df.columns):
@@ -35,20 +36,32 @@ def plot_gll_data(
     if isinstance(axes, plt.Axes):
         axes = [axes]
     for non_coord_col, ax in zip(sorted(non_coord_cols), axes):
-        coords, vals = df_to_grid(
-            df, non_coord_col, coords=coord_labels, max_dist=max_dist
-        )
-        extents = [min(coords[0]), max(coords[0]), min(coords[1]), max(coords[1])]
-        im = ax.imshow(vals, origin="lower", extent=extents, alpha=alpha)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        ax.set_title(non_coord_col)
-        ax.set_ylabel(coord_labels[1])
-        ax.set_xlabel(coord_labels[0])
-        fig.colorbar(im, cax=cax, fraction=0.039, pad=0.04)
-        _maybe_switch_axis_to_km(ax)
+        plot_single_gll(ax, df, non_coord_col, coord_labels, max_dist, alpha=alpha)
     plt.tight_layout()
     return fig, axes
+
+
+def plot_single_gll(ax, df, column, coord_labels, max_dist, alpha=None, vlims=None):
+    """Plot a single GLL column in dataframe."""
+    if not vlims:
+        vmin, vmax = None, None
+    else:
+        assert len(vlims) == 2
+        vmin, vmax = vlims[0], vlims[1]
+    coords, vals = df_to_grid(df, column, coords=coord_labels, max_dist=max_dist)
+    extents = [min(coords[0]), max(coords[0]), min(coords[1]), max(coords[1])]
+    im = ax.imshow(
+        vals, origin="lower", extent=extents, alpha=alpha, vmin=vmin, vmax=vmax
+    )
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    ax.set_title(column)
+    ax.set_ylabel(coord_labels[1])
+    ax.set_xlabel(coord_labels[0])
+    fig = ax.get_figure()
+    fig.colorbar(im, cax=cax, fraction=0.039, pad=0.04)
+    _maybe_switch_axis_to_km(ax)
+    return ax
 
 
 def plot_gll_historgrams(df, ax=None, title=""):
@@ -78,8 +91,6 @@ def plot_kernels(
     """
     Plot several kernels.
     """
-    default_cols = [x for x in kernel_df.columns if x not in {"x", "z"}]
-    cols = columns if columns is not None else default_cols
     columns = [columns] if isinstance(columns, str) else columns
     fig, axes = plt.subplots(1, len(columns))
     flat = axes if not isinstance(axes, np.ndarray) else axes.flatten()
@@ -100,8 +111,11 @@ def plot_single_kernel(
     ax=None,
     scale=0.25,
     max_stations=10,
+    alpha=0.5,
 ):
     """Plot Rho, Alpha, Beta"""
+    if not {"x", "z"}.issubset(set(df.columns)):
+        df = df.reset_index()
     data = df[column]
     abs_max_val = np.abs(data).max()
     min_val, max_val = -abs_max_val * scale, abs_max_val * scale
@@ -122,7 +136,7 @@ def plot_single_kernel(
         vmin=min_val,
         vmax=max_val,
         origin="lower",
-        alpha=0.5,
+        alpha=alpha,
     )
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)

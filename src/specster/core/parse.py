@@ -1,6 +1,7 @@
 """
 Utils module to help parse specfem files.
 """
+import warnings
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict
@@ -79,6 +80,10 @@ def write_directory_binaries(df, path):
         for col in proc_df.columns:
             data = proc_df[col].values
             name = f"proc{proc:06d}_{col}.bin"
+            if np.all(np.isnan(data)):
+                msg = f"{col} is all NaN, not saving to {path / name}!"
+                warnings.warn(msg)
+                continue
             data_path = path / name
             write_specfem_binary(data, data_path)
 

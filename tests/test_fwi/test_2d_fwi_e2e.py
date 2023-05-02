@@ -4,6 +4,8 @@ Test end to end for FWI workflow.
 
 import pytest
 
+import specster as sp
+
 
 @pytest.fixture(scope="class")
 def run_inverter(control_2d_inclusion_inversion):
@@ -12,10 +14,10 @@ def run_inverter(control_2d_inclusion_inversion):
 
 
 @pytest.mark.e2e
-# @pytest.mark.slow
+@pytest.mark.slow
 class TestBasicWorkflow:
     """Ensure the basic workflow functions"""
 
     def test_inverter(self, run_inverter):
         """Ensure the inverter was run."""
-        breakpoint()
+        assert isinstance(run_inverter, sp.Inverter)

@@ -72,6 +72,7 @@ def kernel_2d_dir_path():
 
 @pytest.fixture(scope="class")
 def weights_kernel(kernel_2d_dir_path):
+    """Get the weights col form the kernel"""
     return read_ascii_kernels(kernel_2d_dir_path, "weights")
 
 
@@ -244,7 +245,7 @@ def control_2d_inclusion_inversion(tmp_path_factory):
             true_control=control_true,
             working_path=path,
             misfit=specster.fwi.WaveformMisFit,
-            kernels=('beta',),  # SH simulation only beta here.
+            kernels=("beta",),  # SH simulation only beta here.
         )
         inverter.save_checkpoint()
         cache_file_or_dir(path, cache_name)

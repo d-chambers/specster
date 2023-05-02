@@ -1,10 +1,8 @@
 """
 Tests for converting to/from GLL and evenly sampled grids.
 """
-import pytest
 
-from specster.core.grid import df_to_grid, grid_to_df
-from specster.core.parse import read_ascii_kernels
+from specster.core.grid import df_to_grid
 
 
 class TestConvertToRegularGrid:

@@ -10,12 +10,20 @@ from scipy.interpolate.interpnd import _ndim_coords_from_arrays
 from scipy.spatial import cKDTree
 
 
-def _get_regularly_sampled_coords(array):
-    """Get extrapolate array into regularly sampled coords."""
+def get_average_dx(array):
+    """Get an average sample spacing for an uneven array."""
     mins = np.min(array, axis=0)
     maxs = np.max(array, axis=0)
     lens = maxs - mins
     dx = np.sqrt(np.prod(lens) / len(array))
+    return dx
+
+
+def _get_regularly_sampled_coords(array):
+    """Get extrapolate array into regularly sampled coords."""
+    mins = np.min(array, axis=0)
+    maxs = np.max(array, axis=0)
+    dx = get_average_dx(array)
     out = [np.arange(mi, ma + dx, dx) for mi, ma in zip(mins, maxs)]
     return out, dx
 

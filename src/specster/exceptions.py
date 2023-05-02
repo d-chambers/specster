@@ -13,3 +13,7 @@ class UnhandledParFileLine(SpecsterError, ValueError):
 
 class SpecFEMError(SpecsterError, ValueError):
     """Raised when calling specfem gives an error."""
+
+
+class FailedLineSearch(SpecsterError, ValueError):
+    """Raised when the line search in FWI fails."""
