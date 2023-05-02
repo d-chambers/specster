@@ -33,7 +33,7 @@ class SilentDummy:
 
 
 @contextmanager
-def program_render(console, title="", supress_output=False):
+def program_render(console, title="", path="", supress_output=False):
     """Render the output of a program."""
 
     if specster.settings.ci or supress_output:  # do nothing on CI
@@ -43,7 +43,7 @@ def program_render(console, title="", supress_output=False):
             yield console, screen
         if title:
             console.print()
-            console.rule(f"[bold red]Finished command: {title}")
+            console.rule(f"[bold red]Finished command ({path}): {title}")
 
 
 def print_output_run(output_dict):

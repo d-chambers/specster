@@ -108,7 +108,7 @@ class TestReadWriteModel:
         df2 = initial_control_only_data.get_material_model_df()
         assert df.equals(df2)
 
-    # @pytest.mark.slow
+    @pytest.mark.slow
     def test_update_models_used(self, initial_control_only_data):
         """Ensure we can read velocity/density into memory."""
         control = initial_control_only_data
@@ -154,6 +154,5 @@ class TestParallelEnd2End:
 
     def test_each_source_output(self, control_2d_default_3_sources):
         """Ensure a list of output objects can be returned."""
-        control = control_2d_default_3_sources
         out = control_2d_default_3_sources.each_source_output
         assert all([isinstance(x, sp.OutPut2D) for x in out])

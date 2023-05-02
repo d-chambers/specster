@@ -243,7 +243,10 @@ class BaseControl:
 
     def _run_spec_command(self, command: str, bin_path, supress=False):
         """Run a specfem command."""
-        render = program_render(console, title=command, supress_output=supress)
+        render = program_render(
+            console, title=command, supress_output=supress,
+            path=self.base_path,
+        )
         with render as (con, _):
             bin = bin_path / command
             assert bin.exists(), f"binary {bin} doesn't exist!"
@@ -286,16 +289,33 @@ class BaseControl:
             return False
         return self.par == other.par
 
-    def prepare_fwi_forward(self) -> Self:
+    def prepare_fwi_forward(self, use_binary_model=False) -> Self:
         """
         Prepare control structure for forward simulation in FWI workflow.
         """
         self.par.simulation_type = "1"
         self.par.save_forward = True
-        self.par.mesh.setup_with_binary_database = "1"
-        self.par.mesh.save_model = "binary"
-        self.par.mesh.model = "default"
+        if not use_binary_model:  # will regenerate models
+            self.par.mesh.setup_with_binary_database = "1"
+            self.par.mesh.save_model = "binary"
+            self.par.mesh.model = "default"
+        else:
+            self.par.mesh.setup_with_binary_database = "2"
+            self.par.mesh.save_model = "default"
+            self.par.mesh.model = "binary"
         self.par.adjoint_kernel.approximate_hess_kl = True
+        self.write(overwrite=True)
+        return self
+
+    def prepare_forward_from_binaries(self) -> Self:
+        """
+        Prepare control structure for forward simulation in FWI workflow.
+        """
+        self.par.simulation_type = "1"
+        self.par.save_forward = False
+        self.par.mesh.setup_with_binary_database = "2"
+        self.par.mesh.save_model = "default"
+        self.par.mesh.model = "other"
         self.write(overwrite=True)
         return self
 
@@ -346,7 +366,7 @@ class BaseControl:
         # ensure cols are set to spatial coords.
         if set(df.columns) & set(self._coord_columns):
             df = df.set_index(list(self._coord_columns))
-        # not index is still spatial coords here; they wont update.
+        # not index is still spatial coords here; they won't update.
         write_directory_binaries(df, self._data_path)
         self.par.mesh.setup_with_binary_database = "2"
         self.par.mesh.model = "binary"
@@ -364,3 +384,8 @@ class BaseControl:
             new_path = out_path / name
             write_ascii_waveforms(tr, new_path)
         return self
+
+    def clear_output_traces(self):
+        """Clear the output traces as to ensure new ones are generated."""
+        for path in self.output_path.rglob('*semd'):
+            path.unlink()

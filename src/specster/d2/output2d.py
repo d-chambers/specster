@@ -257,7 +257,10 @@ class OutPut2D(BaseOutput):
     ) -> pd.DataFrame:
         """Load a kernel into memory."""
         coords = list(self._control._coord_columns)
-        return read_ascii_kernels(self.path, kernel).set_index(coords)
+        out = read_ascii_kernels(self.path, kernel)
+        if set(out.columns) & set(coords):
+            out = out.set_index(coords)
+        return out
 
     #
     # plot_kernels = plot_kernels

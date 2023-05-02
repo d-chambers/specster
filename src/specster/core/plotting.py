@@ -21,6 +21,8 @@ def plot_gll_data(
     max_dist=4,
 ):
     """Plot the values in the grid."""
+    if not set(coord_labels) & set(df.columns):
+        df = df.reset_index()
     non_coord_cols = set(df.columns) - set(coord_labels) - set(exclude)
     if kernel is not None:
         if isinstance(kernel, str):

@@ -16,6 +16,6 @@ def run_inverter(control_2d_inclusion_inversion):
 class TestBasicWorkflow:
     """Ensure the basic workflow functions"""
 
-    # def test_inverter(self, run_inverter):
-    #     """Ensure the inverter was run."""
-    #     breakpoint()
+    def test_inverter(self, run_inverter):
+        """Ensure the inverter was run."""
+        breakpoint()

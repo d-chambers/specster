@@ -6,15 +6,17 @@ import shutil
 from functools import cache, partial, reduce
 from operator import add
 from pathlib import Path
-from typing import List, Literal, Optional, Type, Union
+from typing import List, Literal, Optional, Type, Union, Dict
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import curve_fit
 
 import specster as sp
 from specster.core.misc import parallel_call
 from specster.core.parse import read_ascii_stream
 from specster.core.printer import console, program_render
+from specster.core.models import SpecsterModel
 
 from ..core.control import BaseControl
 from .misfit import _BaseMisFit
@@ -45,6 +47,21 @@ def _run_controls(control: sp.Control2d):
     return control.base_path
 
 
+def _parabola(x, a, b):
+    # Curve fitting function
+    return a * x ** 2 + b
+
+
+class IterationResults(SpecsterModel):
+    iteration: int
+    data_misfit: float
+    module_misfit: Dict[str, float]
+    gradient_scalar: float
+
+
+
+
+
 class Inverter:
     """
     Class for running inversions.
@@ -63,9 +80,10 @@ class Inverter:
     _control_path = "CONTROL"
     _control_true_path = "CONTROL_TRUE"
     _inverter_save_path = "inverter.pkl"
-    _stats_columns = ("data_misfit", "model_misfit", "kernel_step")
     _scratch_path = "SCRATCH"
     _max_iteration_change = 0.02
+    _linesearch_points = 4
+    _material_model_file_name = "materials.parquet"
     _kernel_to_material_map = {"alpha": "vp", "beta": "vs", "rho": "rho"}
 
     def __init__(
@@ -94,9 +112,9 @@ class Inverter:
             control,
             true_control,
         )
-        self._df = pd.DataFrame(columns=list(self._stats_columns))
         self._misfit_aggregator = misfit_aggregator
         self._kernel_names = kernels
+        self.iteration_results = []
 
     def _create_working_directory(
         self,
@@ -154,8 +172,9 @@ class Inverter:
         path = path if name in path.name else path / name
         if not path.exists():
             raise FileNotFoundError(f"{path} does not exist!")
-        out: Inverter = pd.read_pickle(path)
         base_path = path.parent
+        out: Inverter = pd.read_pickle(path)
+        out.working_path = path.parent
         # need to fix paths in case this was copied from elsewhere.
         out._control = sp.Control2d(base_path / out._control_path)
         if (base_path / out._control_true_path).exists():
@@ -166,36 +185,102 @@ class Inverter:
         """
         Run the inversion iteratively.
         """
-        iteration = len(self._df) + 1
+        iteration = len(self.iteration_results) + 1
         iteration_str = f"Iteration {iteration:d}"
         with program_render(console, title=f"FWI {iteration_str}", supress_output=True):
             console.rule(f"[bold red]Running FWI ({self.working_path}) {iteration_str}")
-            # add new row to tracking df.
-            self._df = pd.concat(
-                [self._df, pd.DataFrame(columns=list(self._stats_columns))]
-            )
             controls = self.get_controls()  # controls for each event
             # get adjoints for current data, update misfit and write adjoints.
-            current_streams = self._get_current_event_streams()
-            misfit, adjoints = self._calc_misfit_adjoints(current_streams)
+            c_streams = self._get_current_event_streams()
+            misfit, adjoints = self._calc_misfit_adjoints(c_streams)
             console.print(f"Data misfit is {misfit}")
-            self._df.loc[len(self._df) - 1, "data_misfit"] = misfit
             self._write_adjoints_to_each_event(adjoints, control_list=controls)
             # run FWI, get aggregated kernels
-            console.print(f"Running adjoints for {len(controls)} events")
+            console.print(f"Running adjoint simulation for {len(controls)} events")
             self._run_controls(control_list=controls)
             console.print(f"Summing kernels for {len(controls)} events")
             kernels = self._aggregate_kernels(controls)
             self._save_iteration_kernels(kernels, iteration)
             console.print(f"Conducting line search to find gradient scaling")
             current_material_df = self._control.get_material_model_df()
-            lam = self._linesearch_alpha(kernels, current_material_df)
+            self._write_material_df(current_material_df, iteration)
+            grad_scale, new_model = self._linesearch_alpha(
+                kernels,
+                current_material_df,
+                misfit,
+                controls=controls,
+            )
+            maybe_model_misfit = self._calc_model_misfit(new_model)
+            self._broadcast_model_updates(new_model)
+            self.save_checkpoint()
+            console.print(f"Finished iteration, saving state.")
+            result = IterationResults(
+                iteration=iteration,
+                data_misfit=misfit,
+                model_misfit=maybe_model_misfit,
+                gradient_scalar=grad_scale,
+            )
+            self.iteration_results.append(result)
 
-    def _linesearch_alpha(self, kernels, material_df):
+    def _linesearch_alpha(self, kernels, material_df, current_misfit, controls=None):
         """Find the optimal update for line search."""
-        k_df = kernels.rename(columns=self._kernel_to_material_map)
-        m_df = material_df.loc[:, k_df.columns]
-        breakpoint()
+        controls = controls or self.get_controls()
+        procs = material_df['proc']
+        k_df = (
+            kernels.rename(columns=self._kernel_to_material_map)
+        )
+        m_df = material_df.loc[:, list(k_df.columns)]
+        model_norm = m_df.max()
+        kernel_norm = k_df.max()
+
+        normed_kernels = k_df / kernel_norm
+
+        scaled_alpha = self._max_iteration_change / self._linesearch_points
+        trial_lambdas = np.arange(0, self._linesearch_points + 1) * scaled_alpha
+        results = np.zeros_like(trial_lambdas)
+        results[0] = current_misfit
+        for index, trial_lambda in enumerate(trial_lambdas):
+            if index == 0:
+                continue
+            delta = -normed_kernels * model_norm * trial_lambda
+            new_model = m_df + delta.values
+            new_model['proc'] = procs.values
+            self._broadcast_model_updates(
+                new_model,
+                controls,
+                include_base=False
+            )
+            self._prep_controls_forward_use_model(controls)
+            self._run_controls(control_list=controls)
+            streams = self._get_current_event_streams()
+            misfit, _ = self._calc_misfit_adjoints(streams, include_adjoint=False)
+            results[index] = misfit
+        (c1, c2, c3) = np.polyfit(trial_lambdas, results, 2)
+        # new = trial_lambdas**2 * c1 + trial_lambdas * c2 + c3
+        # new = _parabola(trial_lambdas, a, b)
+        best_lambda = -c2/(2*c1)
+        gradient_scalar = - best_lambda * model_norm
+        final_delta = -normed_kernels * model_norm * best_lambda
+        return gradient_scalar, m_df + final_delta.values
+
+
+
+    def _prep_controls_forward_use_model(self, controls=None):
+        """Prepare all the controls for a forward run using model databases."""
+        controls = controls or self.get_controls()
+        for control in controls:
+            control.clear_output_traces()
+            control.prepare_fwi_forward(use_binary_model=True)
+            control.write(overwrite=True)
+
+    def _broadcast_model_updates(self, model, controls=None, include_base=True):
+        """Broadcast model updates to all event directories."""
+        controls = controls or self.get_controls()
+        for control in controls:
+            control.set_material_model_df(model)
+            # breakpoint()
+        if include_base:
+            self._control.set_material_model(model)
 
     def _save_iteration_kernels(self, kernel: pd.DataFrame, iteration):
         """Save the kernels to disk in the appropriate iteration."""
@@ -225,12 +310,14 @@ class Inverter:
         """
         Apply preprocessing to the kernels.
 
-        By default this is just multiplying the hessian.
+        By default this is just multiplying the hessian, then smoothing
+        around the stations.
         """
         new = pd.DataFrame(index=kernel_df.index)
         hess_1 = kernel_df["Hessian1"]
         for kname in self._kernel_names:
-            new[kname] = kernel_df[kname] / hess_1
+            smooth = kernel_df[kname] / hess_1
+            new[kname] = smooth
         return new
 
     def _write_adjoints_to_each_event(self, adjoints, control_list=None):
@@ -303,3 +390,18 @@ class Inverter:
             )
         ]
         return st_obs_list
+
+    def _write_material_df(self, current_material_df, iteration):
+        base_path = self._get_iteration_directory(iteration)
+        save_path = base_path / self._material_model_file_name
+        current_material_df.to_parquet(save_path)
+
+    def _calc_model_misfit(self, new_model):
+        """Calc L2 norm for current and true model."""
+        true_mod = self._true_model
+        if true_mod is None:
+            return np.NaN
+        sub = true_mod[new_model.columns]
+        l2_norm = np.linalg.norm(sub.values - new_model.values, axis=0)
+        out = {col: norm for col, norm in zip(new_model.columns, l2_norm)}
+        return out

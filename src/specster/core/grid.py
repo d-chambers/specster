@@ -22,6 +22,8 @@ def _get_regularly_sampled_coords(array):
 
 def df_to_grid(df, column, coords=("x", "z"), max_dist=4):
     """Convert df to a grid of values."""
+    if not set(df.columns) & set(coords):
+        df = df.reset_index()
     xz = df[["x", "z"]].values
     new_coords, dx = _get_regularly_sampled_coords(xz)
     old_coords = df[list(coords)].values

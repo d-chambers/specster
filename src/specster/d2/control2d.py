@@ -106,9 +106,9 @@ class Control2d(BaseControl):
         parallel_call(callables)
         return self
 
-    def prepare_fwi_forward(self) -> Self:
+    def prepare_fwi_forward(self, *args, **kwargs) -> Self:
         """Prepare for forward run in FWI."""
-        self = super().prepare_fwi_forward()
+        self = super().prepare_fwi_forward(*args, **kwargs)
         # Not sure why but other examples set number of control els to 9;
         # just follow suit here. May need to change for 3D.
         self.par.mesh.ngnod = "9"
