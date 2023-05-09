@@ -11,8 +11,12 @@ from pathlib import Path
 from typing import Dict, Literal, Optional, Union
 
 import numpy as np
+import pandas as pd
 import pooch
 from jinja2 import Template
+from obsplus.constants import NSLC
+from obsplus.utils.pd import get_seed_id_series
+from obsplus.utils.time import to_datetime64, to_timedelta64
 from pydantic import BaseModel
 
 import specster
@@ -274,3 +278,23 @@ def run_new_par(control, supress_output=False):
         raise e
     control.par = par_old
     control.write(overwrite=True)
+
+
+def get_stream_summary_df(stream) -> pd.DataFrame:
+    """
+    Convert a stream of sequence of traces into a datframe.
+
+    Parameters
+    ----------
+    stream
+        The streams to convert to a dataframe.
+    """
+    stats_columns = list(NSLC) + ["starttime", "endtime", "sampling_rate"]
+    trace_contents = [{i: tr.stats[i] for i in stats_columns} for tr in stream]
+    df = pd.DataFrame(trace_contents, columns=stats_columns)
+    # ensure time(y) columns have proper
+    df["starttime"] = to_datetime64(df["starttime"])
+    df["endtime"] = to_datetime64(df["endtime"])
+    df["sampling_period"] = to_timedelta64(1 / df["sampling_rate"])
+    df["seed_id"] = get_seed_id_series(df)
+    return df

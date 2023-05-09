@@ -3,50 +3,114 @@ Modules for storing various misfit functions.
 """
 import abc
 from functools import cache
+from typing import Optional
 
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import obspy
 import pandas as pd
 from matplotlib.lines import Line2D
+from obsplus.utils.time import to_utc
 from obspy.signal.cross_correlation import correlate, xcorr_max
 from scipy.integrate import simps
 
-matplotlib.rcParams.update({"font.size": 14})
+from specster.core.misc import get_stream_summary_df
+from specster.exceptions import UnsetStreamsError
 
 
-class _BaseMisFit(abc.ABC):
+class _BaseMisfit(abc.ABC):
     _component_colors = {"Z": "orange", "X": "cyan", "Y": "Red"}
+    window_df: Optional[pd.DataFrame] = None
+    waveform_df_: Optional[pd.DataFrame] = None
+    _default_taper = 0.95
 
-    def __init__(self, observed_st, synthetic_st):
-        """Read in the streams for each directory."""
-        self.st_obs = observed_st.sort()
-        self.st_synth = synthetic_st.sort()
-        self.validate_streams()
-
-    def validate_streams(self):
+    def validate_streams(self, st_obs, st_synthetic):
         """Custom validation for streams."""
-        st1 = self.st_obs
-        st2 = self.st_synth
-        assert len(st1) == len(st2)
-        for tr1, tr2 in zip(st1, st2):
+        assert len(st_obs) == len(st_synthetic)
+        for tr1, tr2 in zip(st_obs, st_synthetic):
             assert tr1.id == tr2.id
             assert tr1.stats.sampling_rate == tr2.stats.sampling_rate
 
+    def _validate_stream_dfs(self, df_obs, df_synth):
+        """Ensure the data in the streams are compatible."""
+        assert (df_obs["seed_id"] == df_synth["seed_id"]).all()
+        assert (df_obs["sampling_rate"] == df_synth["sampling_rate"]).all()
+
+    def _get_overlap_df(self, df_obs, df_synth):
+        """
+        Get overlap dataframe.
+
+        This is a dataframe with data for both streams.
+        """
+        sc, ec = "starttime", "endtime"
+        starts = np.stack([df_obs[sc].values, df_synth[sc].values]).T
+        ends = np.stack([df_obs[ec].values, df_synth[ec].values]).T
+        out = df_obs.copy()
+        out["starttime"] = np.max(starts, axis=1)
+        out["endtime"] = np.max(ends, axis=1)
+        return out
+
+    def _set_traces_in_overlap_df(self, overlap_df, st_obs, st_synth):
+        """Set the traces as columns in the overlap dataframe."""
+        start = to_utc(overlap_df["starttime"].values)
+        end = to_utc(overlap_df["endtime"].values)
+        out_tr_obs = []
+        out_tr_synth = []
+        for ind in range(len(start)):
+            t1, t2 = start[ind], end[ind]
+            tr_obs = st_obs[ind].trim(starttime=t1, endtime=t2)
+            tr_synth = st_synth[ind].trim(starttime=t1, endtime=t2)
+            out_tr_obs.append(self.preprocess_trace(tr_obs))
+            out_tr_synth.append(self.preprocess_trace(tr_synth))
+        overlap_df["tr_obs"] = out_tr_obs
+        overlap_df["tr_synth"] = out_tr_synth
+        return overlap_df
+
+    def _maybe_set_waveform_df(self, st_obs, st_synth):
+        """
+        Sets the dataframe containing data.
+        """
+        if st_obs is None or st_synth is None:
+            if self.waveform_df_ is not None:
+                return self.waveform_df_
+            msg = "streams must be provided if waveform_df not yet set!"
+            raise UnsetStreamsError(msg)
+        # validate data contents.
+        df_obs = get_stream_summary_df(st_obs)
+        df_synth = get_stream_summary_df(st_synth)
+        self._validate_stream_dfs(df_obs, df_synth)
+        out = self._get_overlap_df(df_obs, df_synth)
+        if self.window_df is not None:
+            pass
+            # out = get_window(self.window_df, out)
+        else:
+            out = self._set_traces_in_overlap_df(out, st_obs, st_synth)
+        self.waveform_df_ = out
+
+    def preprocess_trace(self, tr):
+        """Function for pre-processing traces."""
+        return tr.detrend("linear").taper(self._default_taper)
+
     def iterate_streams(self):
-        """Iterate streams, yield corresponding traces for obs and synth"""
-        st_obs, st_synth = self.st_obs, self.st_synth
-        for tr_obs, tr_synth in zip(st_obs, st_synth):
+        """
+        Yield streams for observed and synthetic data.
+
+        First validates the streams then sets the waveform_df which will
+        specify which parts of the stream are used.
+
+        """
+        obs_list = self.waveform_df_["tr_obs"].values
+        synth_list = self.waveform_df_["tr_synth"].values
+        for tr_obs, tr_synth in zip(obs_list, synth_list):
             yield tr_obs, tr_synth
 
     @abc.abstractmethod
-    def calc_misfit(self) -> dict[str, float]:
-        """Calculate the misfit between streams."""
+    def calc_misfit(self, tr_obs, tr_synth) -> dict[str, float]:
+        """Calculate the misfit between observed and synthetic traces."""
 
     @abc.abstractmethod
-    def get_adjoint_sources(self) -> obspy.Stream:
-        """Return the adjoint source trace."""
+    def calc_adjoint(self, tr_obs, tr_synth) -> dict[str, float]:
+        """Calculate the adjoint source between observed and synthetic traces."""
 
     def plot(self, station=None, out_file=None):
         """Create a plot of observed/synthetic."""
@@ -108,8 +172,28 @@ class _BaseMisFit(abc.ABC):
 
         return fig, (wf_ax, ad_ax)
 
+    def get_misfit(self, st_obs=None, st_synth=None):
+        """Calculate the misfit between streams."""
+        self._maybe_set_waveform_df(st_obs=st_obs, st_synth=st_synth)
+        out = []
+        for tr_obs, tr_synth in self.iterate_streams():
+            out.append(self.calc_misfit(tr_obs, tr_synth))
+        out = pd.Series(out, index=self.waveform_df_.index)
+        return out
 
-class WaveformMisFit(_BaseMisFit):
+    def get_adjoint_sources(self, st_obs=None, st_synth=None) -> obspy.Stream:
+        """Return the adjoint source trace."""
+        self._maybe_set_waveform_df(st_obs=st_obs, st_synth=st_synth)
+        out = []
+        for tr_obs, tr_synth in self.iterate_streams():
+            out.append(self.calc_adjoint(tr_obs, tr_synth))
+        return self._assemble_output_stream(out)
+
+    def _assemble_output_stream(self, adjoint_list):
+        """Return a stream with all the traces put back together."""
+
+
+class WaveformMisfit(_BaseMisfit):
     """
     Manager to calculate misfit and ajoints for waveform misfit.
 
@@ -121,27 +205,20 @@ class WaveformMisFit(_BaseMisFit):
         The calculated stream
     """
 
-    @cache
-    def calc_misfit(self):
+    def calc_misfit(self, tr_obs, tr_synth):
         """Calculate the misfit between streams."""
-        out = {}
-        for tr_obs, tr_synth in self.iterate_streams():
-            misfit = simps((tr_synth.data - tr_obs.data) ** 2, dx=tr_obs.stats.delta)
-            out[tr_obs.id] = misfit
-        return out
+        dx = tr_obs.stats.delta
+        misfit = simps((tr_synth.data - tr_obs.data) ** 2, dx=dx)
+        return misfit
 
-    @cache
-    def get_adjoint_sources(self) -> obspy.Stream:
+    def calc_adjoint(self, tr_obs, tr_synth):
         """Return the adjoint source trace."""
-        out = []
-        for tr_obs, tr_synth in self.iterate_streams():
-            new = tr_obs.copy()
-            new.data = tr_synth.data - tr_obs.data
-            out.append(new)
-        return obspy.Stream(out)
+        new = tr_obs.copy()
+        new.data = tr_synth.data - tr_obs.data
+        return new
 
 
-class TravelTimeMisFit(_BaseMisFit):
+class TravelTimeMisfit(_BaseMisfit):
     """
     Manager to calculate misfit and ajoints for traveltime misfit.
 
@@ -232,7 +309,7 @@ class TravelTimeMisFit(_BaseMisFit):
         return ((current / max_vals) < self._trace_min).any()
 
 
-class AmplitudeMisFit(_BaseMisFit):
+class AmplitudeMisfit(_BaseMisfit):
     """
     Manager to calculate misfit and ajoints for amplitude misfit.
 

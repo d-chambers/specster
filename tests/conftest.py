@@ -244,7 +244,7 @@ def control_2d_inclusion_inversion(tmp_path_factory):
             control=control_initial,
             true_control=control_true,
             working_path=path,
-            misfit=specster.fwi.WaveformMisFit,
+            misfit=specster.fwi.WaveformMisfit,
             kernels=("beta",),  # SH simulation only beta here.
         )
         inverter.save_checkpoint()

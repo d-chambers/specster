@@ -23,7 +23,7 @@ from specster.core.printer import console, program_render
 from specster.exceptions import FailedLineSearch
 
 from ..core.control import BaseControl
-from .misfit import _BaseMisFit
+from .misfit import _BaseMisfit
 
 
 def _run_each_source(control):
@@ -94,7 +94,7 @@ class Inverter:
         self,
         observed_data_path: Union[Path, BaseControl],
         control: BaseControl,
-        misfit: Type[_BaseMisFit],
+        misfit: Type[_BaseMisfit],
         true_control: Optional[BaseControl] = None,
         optimization: Literal["steepest descent"] = "steepest descent",
         stream_pre_processing=None,

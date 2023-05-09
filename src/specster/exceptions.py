@@ -17,3 +17,7 @@ class SpecFEMError(SpecsterError, ValueError):
 
 class FailedLineSearch(SpecsterError, ValueError):
     """Raised when the line search in FWI fails."""
+
+
+class UnsetStreamsError(SpecsterError, ValueError):
+    """Raised when streams are not yet set."""
