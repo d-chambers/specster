@@ -13,6 +13,7 @@ from matplotlib.lines import Line2D
 from obsplus.utils.time import to_utc
 from obspy.signal.cross_correlation import correlate, xcorr_max
 from scipy.integrate import simps
+from obsplus.constants import NSLC
 
 from specster.core.misc import get_stream_summary_df
 from specster.exceptions import UnsetStreamsError
@@ -22,14 +23,13 @@ class _BaseMisfit(abc.ABC):
     _component_colors = {"Z": "orange", "X": "cyan", "Y": "Red"}
     window_df: Optional[pd.DataFrame] = None
     waveform_df_: Optional[pd.DataFrame] = None
+    synth_df_: Optional[pd.DataFrame] = None
     _default_taper = 0.95
+    _normalize = False
 
-    def validate_streams(self, st_obs, st_synthetic):
-        """Custom validation for streams."""
-        assert len(st_obs) == len(st_synthetic)
-        for tr1, tr2 in zip(st_obs, st_synthetic):
-            assert tr1.id == tr2.id
-            assert tr1.stats.sampling_rate == tr2.stats.sampling_rate
+    def __init__(self, window_df=None, normalize=False):
+        self.window_df = window_df
+        self._normalize = normalize
 
     def _validate_stream_dfs(self, df_obs, df_synth):
         """Ensure the data in the streams are compatible."""
@@ -78,18 +78,21 @@ class _BaseMisfit(abc.ABC):
         # validate data contents.
         df_obs = get_stream_summary_df(st_obs)
         df_synth = get_stream_summary_df(st_synth)
+        self.synth_df_ = df_synth
         self._validate_stream_dfs(df_obs, df_synth)
         out = self._get_overlap_df(df_obs, df_synth)
         if self.window_df is not None:
-            pass
-            # out = get_window(self.window_df, out)
+            out = self._get_window_df(self.window_df, out, st_obs, st_synth)
         else:
             out = self._set_traces_in_overlap_df(out, st_obs, st_synth)
         self.waveform_df_ = out
 
     def preprocess_trace(self, tr):
         """Function for pre-processing traces."""
-        return tr.detrend("linear").taper(self._default_taper)
+        out = tr.detrend("linear").taper(self._default_taper)
+        if self._normalize:
+            out = out.normalize()
+        return out
 
     def iterate_streams(self):
         """
@@ -111,6 +114,58 @@ class _BaseMisfit(abc.ABC):
     @abc.abstractmethod
     def calc_adjoint(self, tr_obs, tr_synth) -> dict[str, float]:
         """Calculate the adjoint source between observed and synthetic traces."""
+
+    def get_misfit(self, st_obs=None, st_synth=None):
+        """Calculate the misfit between streams."""
+        self._maybe_set_waveform_df(st_obs=st_obs, st_synth=st_synth)
+        out = []
+        for tr_obs, tr_synth in self.iterate_streams():
+            out.append(self.calc_misfit(tr_obs, tr_synth))
+        out = pd.Series(out, index=self.waveform_df_.index)
+        return out
+
+    def get_adjoint_sources(self, st_obs=None, st_synth=None) -> obspy.Stream:
+        """Return the adjoint source trace."""
+        self._maybe_set_waveform_df(st_obs=st_obs, st_synth=st_synth)
+        out = []
+        for tr_obs, tr_synth in self.iterate_streams():
+            out.append(self.calc_adjoint(tr_obs, tr_synth))
+        return self._assemble_output_stream(out)
+
+    def _assemble_output_stream(self, adjoint_list):
+        """Return a stream with all the traces put back together."""
+        # we need traces with the same stats as synthetic ones.
+        base_trace_dict = self._empty_trace_dict_from_df(self.synth_df_)
+        for tr in adjoint_list:
+            self._add_traces(base_trace_dict[tr.id], tr)
+        return obspy.Stream(list(base_trace_dict.values()))
+
+    def _add_traces(self, base, tr):
+        """Add trace to a """
+        assert len(tr) <= len(base)
+        assert tr.stats.starttime >= base.stats.starttime
+        assert base.stats.sampling_rate == tr.stats.sampling_rate
+        sr = base.stats.sampling_rate
+        start_ind = int((tr.stats.starttime - base.stats.starttime) * sr)
+        base.data[start_ind: start_ind + len(tr)] += tr.data
+
+    def _empty_trace_dict_from_df(self, df):
+        """Create a dict of unique seed ids: empty trace from a dataframe."""
+        assert df["seed_id"].unique().all()
+        df = df.assign(starttime=to_utc(df['starttime']), endtime=to_utc(df['endtime']))
+        out = {}
+        for inf in df.to_dict("record"):
+            shape = (inf['endtime'] - inf['starttime']) * inf['sampling_rate']
+            zeros = np.zeros(int(np.ceil(shape)) + 1)
+            trace = obspy.Trace(data=zeros, header=inf)
+            out[trace.id] = trace
+        return out
+
+
+    def _get_window_df(self, window_df, avail_df, st_obs, st_synth):
+        """Get a dataframe of traces for each window selected time."""
+        breakpoint()
+        pass
 
     def plot(self, station=None, out_file=None):
         """Create a plot of observed/synthetic."""
@@ -172,27 +227,6 @@ class _BaseMisfit(abc.ABC):
 
         return fig, (wf_ax, ad_ax)
 
-    def get_misfit(self, st_obs=None, st_synth=None):
-        """Calculate the misfit between streams."""
-        self._maybe_set_waveform_df(st_obs=st_obs, st_synth=st_synth)
-        out = []
-        for tr_obs, tr_synth in self.iterate_streams():
-            out.append(self.calc_misfit(tr_obs, tr_synth))
-        out = pd.Series(out, index=self.waveform_df_.index)
-        return out
-
-    def get_adjoint_sources(self, st_obs=None, st_synth=None) -> obspy.Stream:
-        """Return the adjoint source trace."""
-        self._maybe_set_waveform_df(st_obs=st_obs, st_synth=st_synth)
-        out = []
-        for tr_obs, tr_synth in self.iterate_streams():
-            out.append(self.calc_adjoint(tr_obs, tr_synth))
-        return self._assemble_output_stream(out)
-
-    def _assemble_output_stream(self, adjoint_list):
-        """Return a stream with all the traces put back together."""
-
-
 class WaveformMisfit(_BaseMisfit):
     """
     Manager to calculate misfit and ajoints for waveform misfit.
@@ -204,6 +238,7 @@ class WaveformMisfit(_BaseMisfit):
     synthetic_st
         The calculated stream
     """
+
 
     def calc_misfit(self, tr_obs, tr_synth):
         """Calculate the misfit between streams."""

@@ -5,9 +5,12 @@ Tests for misfit functions.
 import numpy as np
 import obspy
 import pytest
+import matplotlib.pyplot as plt
+
 
 from specster.exceptions import UnsetStreamsError
 from specster.fwi import WaveformMisfit
+from specster.core.misc import get_stream_summary_df
 
 
 @pytest.fixture(scope="class")
@@ -53,3 +56,31 @@ class TestMisfitInterface:
 
         with pytest.raises(UnsetStreamsError):
             waveform_misfit.get_misfit()
+
+    def test_adjoint_source(self, waveform_misfit, initial_st, true_st):
+        """Test for creating adjoint sources."""
+        adjoint = waveform_misfit.get_adjoint_sources(true_st, initial_st)
+        assert len(initial_st) == len(adjoint) == len(true_st)
+        for tr1, tr2, tr3 in zip(initial_st, true_st, adjoint):
+            expected_data = tr1.data - tr2.data
+            assert np.allclose(expected_data, tr3.data)
+
+
+class TestMisfitWindowing:
+    """Tests for windowing"""
+    @pytest.fixture(scope='class')
+    def slim_window(self, initial_st):
+        """
+        Create a 'slim window' which just trims intial_st by a few secs
+        and dropping the last trace.
+        """
+        df = get_stream_summary_df(initial_st)
+        df['starttime'] += np.timedelta64(1, 's')
+        df['endtime'] -= np.timedelta64(1, 's')
+        return df.iloc[:-1]
+
+    def test_basic_windowing(self, initial_st, true_st, slim_window):
+        """Ensure a window """
+        misfit = WaveformMisfit(window_df=slim_window)
+        mis = misfit.get_misfit(true_st, initial_st)
+        breakpoint()
