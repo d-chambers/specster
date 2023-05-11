@@ -2,34 +2,74 @@
 Modules for storing various misfit functions.
 """
 import abc
-from functools import cache
+import copy
 from typing import Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
 import obspy
 import pandas as pd
-from matplotlib.lines import Line2D
 from obsplus.utils.time import to_utc
 from obspy.signal.cross_correlation import correlate, xcorr_max
 from scipy.integrate import simps
-from obsplus.constants import NSLC
 
 from specster.core.misc import get_stream_summary_df
+from specster.core.plotting import plot_misfit
 from specster.exceptions import UnsetStreamsError
 
 
-class _BaseMisfit(abc.ABC):
-    _component_colors = {"Z": "orange", "X": "cyan", "Y": "Red"}
+class BaseMisfit(abc.ABC):
+    """An abstract base class for misfit functions."""
+
     window_df: Optional[pd.DataFrame] = None
     waveform_df_: Optional[pd.DataFrame] = None
     synth_df_: Optional[pd.DataFrame] = None
-    _default_taper = 0.95
-    _normalize = False
+    taper_percentage = 0.05
+    normalize_traces = False
 
     def __init__(self, window_df=None, normalize=False):
         self.window_df = window_df
-        self._normalize = normalize
+        self.normalize_traces = normalize
+
+    # --- methods which must be implemented in subclasses
+
+    @abc.abstractmethod
+    def calc_misfit(self, tr_obs, tr_synth) -> dict[str, float]:
+        """Calculate the misfit between observed and synthetic traces."""
+
+    @abc.abstractmethod
+    def calc_adjoint(self, tr_obs, tr_synth) -> dict[str, float]:
+        """Calculate the adjoint source between observed and synthetic traces."""
+
+    # --- methods which may be implemented in subclasses
+
+    def preprocess_trace(self, tr):
+        """Function for pre-processing traces."""
+        out = tr.detrend("linear").taper(self.taper_percentage)
+        if self.normalize_traces:
+            out = out.normalize_traces()
+        return out
+
+    def get_misfit(self, st_obs=None, st_synth=None):
+        """Calculate the misfit between streams."""
+        self._maybe_set_waveform_df(st_obs=st_obs, st_synth=st_synth)
+        out = []
+        for tr_obs, tr_synth in self.iterate_streams():
+            out.append(self.calc_misfit(tr_obs, tr_synth))
+        out = pd.Series(out, index=self.waveform_df_.index)
+        return out
+
+    def get_adjoint_sources(self, st_obs=None, st_synth=None) -> obspy.Stream:
+        """Return the adjoint source trace."""
+        self._maybe_set_waveform_df(st_obs=st_obs, st_synth=st_synth)
+        out = []
+        for tr_obs, tr_synth in self.iterate_streams():
+            tr = self.calc_adjoint(tr_obs, tr_synth)
+            if tr is not None:
+                out.append(tr)
+        return self._assemble_output_stream(out)
+
+    def new_waveforms_set(self):
+        """Called when new waveforms are set. Can be implemented in subclass."""
 
     def _validate_stream_dfs(self, df_obs, df_synth):
         """Ensure the data in the streams are compatible."""
@@ -86,13 +126,7 @@ class _BaseMisfit(abc.ABC):
         else:
             out = self._set_traces_in_overlap_df(out, st_obs, st_synth)
         self.waveform_df_ = out
-
-    def preprocess_trace(self, tr):
-        """Function for pre-processing traces."""
-        out = tr.detrend("linear").taper(self._default_taper)
-        if self._normalize:
-            out = out.normalize()
-        return out
+        self.new_waveforms_set()
 
     def iterate_streams(self):
         """
@@ -107,31 +141,6 @@ class _BaseMisfit(abc.ABC):
         for tr_obs, tr_synth in zip(obs_list, synth_list):
             yield tr_obs, tr_synth
 
-    @abc.abstractmethod
-    def calc_misfit(self, tr_obs, tr_synth) -> dict[str, float]:
-        """Calculate the misfit between observed and synthetic traces."""
-
-    @abc.abstractmethod
-    def calc_adjoint(self, tr_obs, tr_synth) -> dict[str, float]:
-        """Calculate the adjoint source between observed and synthetic traces."""
-
-    def get_misfit(self, st_obs=None, st_synth=None):
-        """Calculate the misfit between streams."""
-        self._maybe_set_waveform_df(st_obs=st_obs, st_synth=st_synth)
-        out = []
-        for tr_obs, tr_synth in self.iterate_streams():
-            out.append(self.calc_misfit(tr_obs, tr_synth))
-        out = pd.Series(out, index=self.waveform_df_.index)
-        return out
-
-    def get_adjoint_sources(self, st_obs=None, st_synth=None) -> obspy.Stream:
-        """Return the adjoint source trace."""
-        self._maybe_set_waveform_df(st_obs=st_obs, st_synth=st_synth)
-        out = []
-        for tr_obs, tr_synth in self.iterate_streams():
-            out.append(self.calc_adjoint(tr_obs, tr_synth))
-        return self._assemble_output_stream(out)
-
     def _assemble_output_stream(self, adjoint_list):
         """Return a stream with all the traces put back together."""
         # we need traces with the same stats as synthetic ones.
@@ -141,104 +150,60 @@ class _BaseMisfit(abc.ABC):
         return obspy.Stream(list(base_trace_dict.values()))
 
     def _add_traces(self, base, tr):
-        """Add trace to a """
+        """Add trace to a"""
         assert len(tr) <= len(base)
         assert tr.stats.starttime >= base.stats.starttime
         assert base.stats.sampling_rate == tr.stats.sampling_rate
         sr = base.stats.sampling_rate
         start_ind = int((tr.stats.starttime - base.stats.starttime) * sr)
-        base.data[start_ind: start_ind + len(tr)] += tr.data
+        base.data[start_ind : start_ind + len(tr)] += tr.data
 
     def _empty_trace_dict_from_df(self, df):
         """Create a dict of unique seed ids: empty trace from a dataframe."""
         assert df["seed_id"].unique().all()
-        df = df.assign(starttime=to_utc(df['starttime']), endtime=to_utc(df['endtime']))
+        df = df.assign(starttime=to_utc(df["starttime"]), endtime=to_utc(df["endtime"]))
         out = {}
-        for inf in df.to_dict("record"):
-            shape = (inf['endtime'] - inf['starttime']) * inf['sampling_rate']
+        for inf in df.to_dict("records"):
+            shape = (inf["endtime"] - inf["starttime"]) * inf["sampling_rate"]
             zeros = np.zeros(int(np.ceil(shape)) + 1)
             trace = obspy.Trace(data=zeros, header=inf)
             out[trace.id] = trace
         return out
 
-
     def _get_window_df(self, window_df, avail_df, st_obs, st_synth):
         """Get a dataframe of traces for each window selected time."""
-        breakpoint()
-        pass
-
-    def plot(self, station=None, out_file=None):
-        """Create a plot of observed/synthetic."""
-
-        def add_legends(ax):
-            """Add the legends for component and synth/observed."""
-            line1 = Line2D([0], [0], color="0.5", ls="--", label="predicted")
-            line2 = Line2D([0], [0], color="0.5", ls="-", label="observed")
-
-            # Create a legend for the first line.
-            leg1 = ax.legend(handles=[line1, line2], loc="upper right")
-            ax.add_artist(leg1)
-
-            color_lines = [
-                Line2D(
-                    [0],
-                    [0],
-                    color=self._component_colors[x],
-                    ls="-",
-                    label=f"{x} component",
+        adf = avail_df.set_index("seed_id")
+        st_obs_dict = {tr.id: tr for tr in st_obs}
+        st_syn_dict = {tr.id: tr for tr in st_synth}
+        out = []
+        for info in window_df.to_dict(orient="records"):
+            seed = info["seed_id"]
+            start = to_utc(max([info["starttime"], adf.loc[seed, "starttime"]]))
+            end = to_utc(min([info["endtime"], adf.loc[seed, "endtime"]]))
+            tr_obs = st_obs_dict[seed].slice(starttime=start, endtime=end)
+            tr_synth = st_syn_dict[seed].slice(starttime=start, endtime=end)
+            info.update(
+                dict(
+                    starttime=start,
+                    endtime=end,
+                    tr_obs=self.preprocess_trace(tr_obs),
+                    tr_synth=self.preprocess_trace(tr_synth),
                 )
-                for x in self._component_colors
-            ]
-            ax.legend(handles=color_lines, loc="upper left")
+            )
+            out.append(info)
+        return pd.DataFrame(out)
 
-        def maybe_save(fig, out_file):
-            """Maybe save the figure."""
-            if out_file is None:
-                return
-            plt.tight_layout()
-            fig.savefig(out_file)
-            plt.close("all")
+    plot = plot_misfit
 
-        fig, (wf_ax, ad_ax) = plt.subplots(2, 1, sharex=True, figsize=(10, 5))
+    def copy(self):
+        """Copy the misfit and return it."""
+        return copy.deepcopy(self)
 
-        unique_stations = {tr.stats.station for tr in self.st_obs}
-        station = list(unique_stations)[0] if station is None else station
 
-        adjoint = self.get_adjoint_sources()
-
-        for tr_obs, tr_synth in self.iterate_streams():
-            if tr_obs.stats.station != station:
-                continue
-            ad_tr = adjoint[tr_obs.id]
-            # make plots of observed/synthetics
-            color = self._component_colors[tr_obs.stats.component]
-            wf_ax.plot(tr_obs.times(), tr_obs.data, "-", color=color)
-            wf_ax.plot(tr_synth.times(), tr_synth.data, "--", color=color)
-            add_legends(wf_ax)
-            ad_ax.plot(ad_tr.times(), ad_tr.data, "-", color=color)
-
-        wf_ax.set_title("Waveforms")
-        ad_ax.set_title("Adjoint Source")
-
-        ad_ax.set_xlabel("Time (s)")
-        fig.supylabel("Displacement (m)")
-
-        maybe_save(fig, out_file)
-
-        return fig, (wf_ax, ad_ax)
-
-class WaveformMisfit(_BaseMisfit):
+class WaveformMisfit(BaseMisfit):
     """
     Manager to calculate misfit and ajoints for waveform misfit.
-
-    Parameters
-    ----------
-    observed_st
-        The observed stream
-    synthetic_st
-        The calculated stream
     """
-
 
     def calc_misfit(self, tr_obs, tr_synth):
         """Calculate the misfit between streams."""
@@ -253,7 +218,7 @@ class WaveformMisfit(_BaseMisfit):
         return new
 
 
-class TravelTimeMisfit(_BaseMisfit):
+class TravelTimeMisfit(BaseMisfit):
     """
     Manager to calculate misfit and ajoints for traveltime misfit.
 
@@ -270,154 +235,95 @@ class TravelTimeMisfit(_BaseMisfit):
         this ratio, zero its adjoint.
     """
 
-    def __init__(self, observed_st, synthetic_st, trace_min=0.01):
+    _abs_max = np.NaN
+
+    def __init__(self, trace_min=0.01, **kwargs):
         """Read in the streams for each directory."""
         self._trace_min = trace_min
-        super().__init__(observed_st, synthetic_st)
+        super().__init__(**kwargs)
 
-    @cache
-    def calc_trace_absmax(self):
-        """Get a dict of the absolute max of a trace."""
-        out = {}
-        for tr_obs, tr_synth in self.iterate_streams():
-            out[tr_obs.id] = {
-                "observed": np.abs(tr_obs.data).max(),
-                "synthetic": np.abs(tr_synth.data).max(),
-            }
-        return pd.DataFrame(out).T
+    def new_waveforms_set(self):
+        """
+        Update the maximum amplitude to which the traces are compared for
+        potential zeroing.
+        """
+        wdf = self.waveform_df_
+        max_tr_obs = [np.max(np.abs(tr)) for tr in wdf["tr_obs"]]
+        max_tr_syn = [np.max(np.abs(tr)) for tr in wdf["tr_synth"]]
+        self._abs_max = np.max(max_tr_obs + max_tr_syn)
 
-    @cache
-    def calc_normalization(self):
+    def calc_normalization(self, tr_synth):
         """Calculate the normalization waveforms."""
-        out = {}
-        for _, tr_synth in self.iterate_streams():
-            dt = 1 / tr_synth.stats.sampling_rate
-            double_t_diff = tr_synth.copy().differentiate().differentiate()
-            norm = double_t_diff.data * tr_synth.data
-            norm_sum = simps(norm, dx=dt)
-            print(norm_sum)
-            out[tr_synth.id] = norm_sum
+        dt = 1 / tr_synth.stats.sampling_rate
+        double_t_diff = tr_synth.copy().differentiate().differentiate()
+        norm = double_t_diff.data * tr_synth.data
+        norm_sum = simps(norm, dx=dt)
+        return norm_sum
 
-        return out
-
-    @cache
-    def calc_tt_diff(self) -> dict:
+    def calc_tt_diff(self, tr_obs, tr_synth):
         """Calculate the travel time differences"""
-        out = {}
-        for tr_obs, tr_synth in self.iterate_streams():
-            cor = correlate(tr_obs, tr_synth, 100)
-            shift, value = xcorr_max(cor)
-            values = shift / tr_obs.stats.sampling_rate
-            out[tr_obs.id] = values
-        return out
+        cor = correlate(tr_obs, tr_synth, 100)
+        shift, value = xcorr_max(cor)
+        values = shift / tr_obs.stats.sampling_rate
+        return values
 
-    @cache
-    def calc_misfit(self):
+    def calc_misfit(self, tr_obs, tr_synth):
         """Calculate the misfit between streams."""
-        return {i: v**2 for i, v in self.calc_tt_diff().items()}
+        diff = self.calc_tt_diff(tr_obs, tr_synth)
+        return diff**2
 
-    @cache
-    def get_adjoint_sources(self):
+    def calc_trace_amps(self):
+        """Caclualte trace amplitudes."""
+
+    def calc_adjoint(self, tr_obs, tr_synth):
         """Return the adjoint source trace."""
-        out = []
-        tt_diffs = self.calc_tt_diff()
-        norms = self.calc_normalization()
-        for tr_obs, tr_synth in self.iterate_streams():
-            out_tr = tr_synth.copy()
-            dt = 1 / tr_synth.stats.sampling_rate
-            tid = tr_synth.id
-            diff = tt_diffs[tr_synth.id]
-            norm = 1 / norms[tr_synth.id]
-            tdff = np.gradient(tr_synth.data, dt)
-            data = -diff * norm * tdff
-            if self._should_zero_trace(tid):
-                data = np.zeros_like(data)
-            out_tr.data = data
-            out.append(out_tr)
-        return obspy.Stream(out)
+        out_tr = tr_synth.copy()
+        dt = 1 / tr_synth.stats.sampling_rate
+        diff = self.calc_tt_diff(tr_obs, tr_synth)
+        norm = 1 / self.calc_normalization(tr_synth)
+        tdff = np.gradient(tr_synth.data, dt)
+        data = -diff * norm * tdff
+        if self._should_zero_trace(data):
+            data = np.zeros_like(data)
+        out_tr.data = data
+        return out_tr
 
-    def _should_zero_trace(self, tid):
+    def _should_zero_trace(self, data):
         """Return true if data should be zeroes"""
-        df = self.calc_trace_absmax()
-        max_vals = df.max()
-        current = df.loc[tid]
-        return ((current / max_vals) < self._trace_min).any()
+        if np.max(np.abs(data)) < self._abs_max:
+            return True
+        return False
 
 
-class AmplitudeMisfit(_BaseMisfit):
+class AmplitudeMisfit(TravelTimeMisfit):
     """
     Manager to calculate misfit and ajoints for amplitude misfit.
-
-    Parameters
-    ----------
-    observed_st
-        The directory containing the observed data.
-    synthetic_st
-        The directory containing the synthetic data.
     """
 
-    def __init__(self, observed_st, synthetic_st, trace_min=0.01):
-        """Read in the streams for each directory."""
-        self._trace_min = trace_min
-        super().__init__(observed_st, synthetic_st)
-
-    @cache
-    def calc_trace_absmax(self):
-        """Get a dict of the absolute max of a trace."""
-        out = {}
-        for tr_obs, tr_synth in self.iterate_streams():
-            out[tr_obs.id] = {
-                "observed": np.abs(tr_obs.data).max(),
-                "synthetic": np.abs(tr_synth.data).max(),
-            }
-        return pd.DataFrame(out).T
-
-    @cache
-    def calc_normalization(self):
+    def calc_normalization(self, tr_synth):
         """Calculate the normalization waveforms."""
-        out = {}
-        for _, tr_synth in self.iterate_streams():
-            data = tr_synth.data**2
-            tid = tr_synth.id
-            out[tid] = simps(data, dx=1 / tr_synth.stats.sampling_rate)
-        return out
+        data = tr_synth.data**2
+        return simps(data, dx=1 / tr_synth.stats.sampling_rate)
 
-    @cache
-    def calc_amp_ratio(self) -> dict:
+    def calc_amp_ratio(self, tr_obs, tr_synth) -> float:
         """Calculate the travel time differences"""
-        out = {}
-        for tr_obs, tr_synth in self.iterate_streams():
-            rms_obs = np.sqrt(np.mean(tr_obs.data**2))
-            rms_synth = np.sqrt(np.mean(tr_synth.data**2))
-            out[tr_obs.id] = np.log(rms_obs / rms_synth)
-        return out
+        rms_obs = np.sqrt(np.mean(tr_obs.data**2))
+        rms_synth = np.sqrt(np.mean(tr_synth.data**2))
+        return np.log(rms_obs / rms_synth)
 
-    @cache
-    def calc_misfit(self):
+    def calc_misfit(self, tr_obs, tr_synth):
         """Calculate the misfit between streams."""
-        return {i: v**2 for i, v in self.calc_amp_ratio().items()}
+        out = self.calc_amp_ratio(tr_obs, tr_synth)
+        return out**2
 
-    @cache
-    def get_adjoint_sources(self):
+    def calc_adjoint(self, tr_obs, tr_synth):
         """Return the adjoint source trace."""
-        out = {}
-        amp_ratios = self.calc_amp_ratio()
-        norms = self.calc_normalization()
-        for tr_obs, tr_synth in self.iterate_streams():
-            out_tr = tr_synth.copy()
-            norm = 1 / norms[tr_obs.id]
-            amp = amp_ratios[tr_obs.id]
-            synth_data = tr_synth.data
-            data = -norm * amp * synth_data
-            if self._should_zero_trace(tr_obs.id):
-                data = np.zeros_like(data)
-            out_tr.data = data
-            out[out_tr.id] = out_tr
-        return out
-
-    def _should_zero_trace(self, tid):
-        """Return true if data should be zeroes"""
-        df = self.calc_trace_absmax()
-        max_vals = df.max()
-        current = df.loc[tid]
-        return ((current / max_vals) < self._trace_min).any()
+        out_tr = tr_synth.copy()
+        norm = 1 / self.calc_normalization(tr_synth)
+        amp = self.calc_amp_ratio(tr_obs, tr_synth)
+        synth_data = tr_synth.data
+        data = -norm * amp * synth_data
+        if self._should_zero_trace(data):
+            data = np.zeros_like(data)
+        out_tr.data = data
+        return out_tr

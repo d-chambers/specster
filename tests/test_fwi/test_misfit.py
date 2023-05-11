@@ -1,16 +1,15 @@
 """
 Tests for misfit functions.
 """
-
+import matplotlib.pyplot as plt
 import numpy as np
 import obspy
+import pandas as pd
 import pytest
-import matplotlib.pyplot as plt
 
-
-from specster.exceptions import UnsetStreamsError
-from specster.fwi import WaveformMisfit
 from specster.core.misc import get_stream_summary_df
+from specster.exceptions import UnsetStreamsError
+from specster.fwi import AmplitudeMisfit, TravelTimeMisfit, WaveformMisfit
 
 
 @pytest.fixture(scope="class")
@@ -68,19 +67,64 @@ class TestMisfitInterface:
 
 class TestMisfitWindowing:
     """Tests for windowing"""
-    @pytest.fixture(scope='class')
+
+    @pytest.fixture(scope="class")
     def slim_window(self, initial_st):
         """
         Create a 'slim window' which just trims intial_st by a few secs
         and dropping the last trace.
         """
         df = get_stream_summary_df(initial_st)
-        df['starttime'] += np.timedelta64(1, 's')
-        df['endtime'] -= np.timedelta64(1, 's')
+        df["starttime"] += np.timedelta64(1, "s")
+        df["endtime"] -= np.timedelta64(1, "s")
         return df.iloc[:-1]
 
     def test_basic_windowing(self, initial_st, true_st, slim_window):
-        """Ensure a window """
+        """Ensure a window"""
         misfit = WaveformMisfit(window_df=slim_window)
         mis = misfit.get_misfit(true_st, initial_st)
-        breakpoint()
+        assert len(mis) == len(slim_window)
+        adjoint = misfit.get_adjoint_sources()
+        assert len(adjoint) == len(initial_st)
+
+
+class TestTravetimeMisfit:
+    """Ensure the travel time misfit can be run."""
+
+    def test_misfit(self, initial_st, true_st):
+        """Ensure a window"""
+        misfit = TravelTimeMisfit()
+        mis = misfit.get_misfit(true_st, initial_st)
+        assert not pd.isnull(mis).any()
+
+    def test_adjoint(self, initial_st, true_st):
+        """Ensure a stream is returned."""
+        misfit = TravelTimeMisfit()
+        adjoints = misfit.get_adjoint_sources(true_st, initial_st)
+        assert len(adjoints) == len(initial_st)
+
+
+class TestAmplitudeMisfit:
+    """Ensure the amplitude misfit can be run."""
+
+    def test_misfit(self, initial_st, true_st):
+        """Ensure a window"""
+        misfit = AmplitudeMisfit()
+        mis = misfit.get_misfit(true_st, initial_st)
+        assert not pd.isnull(mis).any()
+
+    def test_adjoint(self, initial_st, true_st):
+        """Ensure an adjoint stream is returned."""
+        misfit = AmplitudeMisfit()
+        adjoints = misfit.get_adjoint_sources(true_st, initial_st)
+        assert len(adjoints) == len(initial_st)
+
+
+class TestMisfitPlotting:
+    """Test that the misfit can be plotted."""
+
+    def test_simple_plot(self, initial_st, true_st):
+        """A simple test of plotting."""
+        misfit = WaveformMisfit()
+        fig, *_ = misfit.plot(true_st, initial_st)
+        assert isinstance(fig, plt.Figure)

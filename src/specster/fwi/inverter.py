@@ -7,7 +7,7 @@ import time
 from functools import cache, partial, reduce
 from operator import add
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Type, Union
+from typing import Dict, List, Literal, Optional, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,6 +16,7 @@ import pandas as pd
 import specster as sp
 from specster.core.misc import parallel_call
 from specster.core.models import SpecsterModel
+from specster.core.optimize import golden_section_search
 from specster.core.parse import read_ascii_stream
 from specster.core.plotting import plot_gll_data
 from specster.core.preconditioner import median_filter
@@ -23,7 +24,7 @@ from specster.core.printer import console, program_render
 from specster.exceptions import FailedLineSearch
 
 from ..core.control import BaseControl
-from .misfit import _BaseMisfit
+from .misfit import BaseMisfit
 
 
 def _run_each_source(control):
@@ -86,7 +87,7 @@ class Inverter:
     _scratch_path = "SCRATCH"
     _iteration_kernel_file_name = "iteration_kernel.parquet"
     _max_iteration_change = 0.02
-    _linesearch_points = 4
+    _linesearch_points = 8
     _material_model_file_name = "materials.parquet"
     _kernel_to_material_map = {"alpha": "vp", "beta": "vs", "rho": "rho"}
 
@@ -94,7 +95,7 @@ class Inverter:
         self,
         observed_data_path: Union[Path, BaseControl],
         control: BaseControl,
-        misfit: Type[_BaseMisfit],
+        misfit: BaseMisfit,
         true_control: Optional[BaseControl] = None,
         optimization: Literal["steepest descent"] = "steepest descent",
         stream_pre_processing=None,
@@ -218,6 +219,7 @@ class Inverter:
                 current_material_df,
                 misfit,
                 controls=controls,
+                console=console,
             )
             maybe_model_misfit = self._calc_model_misfit(new_model)
             self._broadcast_model_updates(new_model)
@@ -234,32 +236,13 @@ class Inverter:
             console.rule(f"Finished iteration in {duration:.02f} seconds")
         return self
 
-    def _line_search(self, kernels, material_df, current_misfit, controls=None):
+    def _line_search(
+        self, kernels, material_df, current_misfit, controls=None, console=None
+    ):
         """Find the optimal update for line search."""
 
-        def _get_lambda(coefs, trial_lambdas):
-            (c1, c2, c3) = coefs
-            bl = -c2 / (2 * c1)
-            bl = bl if bl < trial_lambdas.max() else trial_lambdas.max()
-            if bl <= trial_lambdas.min():
-                msg = "failed line search!"
-                raise FailedLineSearch(msg)
-            return bl
-
-        controls = controls or self.get_controls()
-        procs = material_df["proc"]
-        k_df = kernels.rename(columns=self._kernel_to_material_map)
-        m_df = material_df.loc[:, list(k_df.columns)]
-        model_norm = m_df.max()
-        kernel_norm = k_df.max()
-        normed_kernels = k_df / kernel_norm
-        scaled_alpha = self._max_iteration_change / self._linesearch_points
-        trial_lambdas = np.arange(0, self._linesearch_points + 1) * scaled_alpha
-        results = np.zeros_like(trial_lambdas)
-        results[0] = current_misfit
-        for index, trial_lambda in enumerate(trial_lambdas):
-            if index == 0:
-                continue
+        def _update(trial_lambda):
+            """Calcualte an update to the model."""
             delta = -normed_kernels * model_norm * trial_lambda
             new_model = m_df + delta.values
             new_model["proc"] = procs.values
@@ -268,9 +251,32 @@ class Inverter:
             self._run_controls(control_list=controls)
             streams = self._get_current_event_streams()
             misfit, _ = self._calc_misfit_adjoints(streams, include_adjoint=False)
-            results[index] = misfit
-        coefs = np.polyfit(trial_lambdas, results, 2)
-        best_lambda = _get_lambda(coefs, trial_lambdas)
+            misfits[trial_lambda] = misfit
+            if console:
+                console.print(
+                    f"--- trial with lambda {trial_lambda} return misfit {misfit}"
+                )
+            return misfit
+
+        controls = controls or self.get_controls()
+        procs = material_df["proc"]
+        k_df = kernels.rename(columns=self._kernel_to_material_map)
+        m_df = material_df.loc[:, list(k_df.columns)]
+        model_norm = m_df.max()
+        kernel_norm = k_df.max()
+        normed_kernels = k_df / kernel_norm
+        misfits = {}
+        best_lambda = golden_section_search(
+            _update,
+            0,
+            self._max_iteration_change,
+            max_iter=self._linesearch_points,
+        )
+        misfits = pd.Series(misfits)
+        if best_lambda <= 0 or misfits.min() > current_misfit:
+            msg = "failed line search!"
+            raise FailedLineSearch(msg)
+
         gradient_scalar = -best_lambda * model_norm
         final_delta = -normed_kernels * model_norm * best_lambda
         new_model = m_df + final_delta.values
@@ -367,11 +373,12 @@ class Inverter:
         assert len(current_st_list) == len(self._st_obs_list)
         misfits = []
         adjoints = []
+        misfiter = self._misfit.copy()
         for st_obs, st_syn in zip(self._st_obs_list, current_st_list):
-            misfit = self._misfit(st_obs, st_syn)
-            misfits.append(np.array(list(misfit.calc_misfit().values())))
+            misfit = misfiter.get_misfit(st_obs, st_syn)
+            misfits.append(misfit.values)
             if include_adjoint:
-                adjoints.append(misfit.get_adjoint_sources())
+                adjoints.append(misfiter.get_adjoint_sources())
         misfit_total_array = np.hstack(misfits)
         return self._misfit_aggregator(misfit_total_array), adjoints
 

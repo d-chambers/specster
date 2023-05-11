@@ -228,7 +228,6 @@ def control_2d_inclusion_inversion(tmp_path_factory):
         path = tmp_path_factory.mktemp("temp_inversion_path")
         control_true = specster.load_2d_example("inclusion_2d")
         control_true.prepare_fwi_forward().run_each_source()
-
         # set model number 2 to have the same properties as mod 1
         # this homogenises the model
         control_initial = control_true.copy()
@@ -237,6 +236,7 @@ def control_2d_inclusion_inversion(tmp_path_factory):
         models[1].Vp = models[0].Vp
         models[1].rho = models[0].rho
         control_initial.write(overwrite=True)
+        control_initial.run()
         control_initial.run_each_source()
 
         inverter = specster.Inverter(
@@ -244,7 +244,7 @@ def control_2d_inclusion_inversion(tmp_path_factory):
             control=control_initial,
             true_control=control_true,
             working_path=path,
-            misfit=specster.fwi.WaveformMisfit,
+            misfit=specster.fwi.WaveformMisfit(),
             kernels=("beta",),  # SH simulation only beta here.
         )
         inverter.save_checkpoint()

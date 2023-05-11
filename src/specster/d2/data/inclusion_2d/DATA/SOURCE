@@ -128,7 +128,6 @@ vx                              = 0  # Horizontal source velocity (m/s)
 vz                              = 0  # Vertical source velocity (m/s)
 
 
-
 ## Source 3
 source_surf                     = .false.  # source inside the medium, or source automatically moved exactly at the surface by the solver
 xs                              = 50d3 # source location x in meters
@@ -192,7 +191,6 @@ factor                          = 7.5d9  # amplification factor
 ## Moving source parameters
 vx                              = 0  # Horizontal source velocity (m/s)
 vz                              = 0  # Vertical source velocity (m/s)
-
 
 
 ## Source 4
@@ -260,9 +258,6 @@ vx                              = 0  # Horizontal source velocity (m/s)
 vz                              = 0  # Vertical source velocity (m/s)
 
 
-
-
-
 ## Source 5
 source_surf                     = .false.  # source inside the medium, or source automatically moved exactly at the surface by the solver
 xs                              = 100d3  # source location x in meters
@@ -326,9 +321,6 @@ factor                          = 7.5d9  # amplification factor
 ## Moving source parameters
 vx                              = 0  # Horizontal source velocity (m/s)
 vz                              = 0  # Vertical source velocity (m/s)
-
-
-
 
 
 ## Source 6

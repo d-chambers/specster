@@ -4,7 +4,9 @@ Module for plotting.
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from obsplus.waveforms import get_waveforms
 
 import specster
 from specster.core.misc import grid
@@ -176,3 +178,73 @@ def _maybe_switch_axis_to_km(ax: plt.Axes, max_value=10_000):
     ax.yaxis.set_major_formatter(lambda x, pos: str(int(x / 1_000)))
     ax.set_xlabel("x (km)")
     ax.set_ylabel("z (km)")
+
+
+def plot_misfit(self, st_obs=None, st_synth=None, station=None):
+    """
+    Create a plot of misfit results.
+
+    Parameters
+    ----------
+    self
+        An instance of BaseMisfit.
+    st_obs
+        The stream with observed data (optional if already set)
+    st_synth
+        The stream with synthetic data (optional if already set)
+    station
+        A station string, if None use first station.
+    """
+
+    def add_legends(ax):
+        """Add the legends for component and synth/observed."""
+        line1 = Line2D([0], [0], color="0.5", ls="--", label="predicted")
+        line2 = Line2D([0], [0], color="0.5", ls="-", label="observed")
+
+        # Create a legend for the first line.
+        leg1 = ax.legend(handles=[line1, line2], loc="upper right")
+        ax.add_artist(leg1)
+
+        color_lines = [
+            Line2D(
+                [0],
+                [0],
+                color=_component_colors[x],
+                ls="-",
+                label=f"{x} component",
+            )
+            for x in _component_colors
+        ]
+        ax.legend(handles=color_lines, loc="upper left")
+
+    _component_colors = {"Z": "orange", "X": "cyan", "Y": "Red"}
+    fig, (wf_ax, ad_ax) = plt.subplots(2, 1, sharex=True, figsize=(10, 5))
+    # calc adjoints
+    adjoint = self.get_adjoint_sources(st_obs, st_synth)
+    misfit = self.get_misfit()
+    # get dataframe of waveforms
+    df = self.waveform_df_.assign(misfit=misfit)
+    unique_stations = np.unique(df["station"])
+    station = unique_stations[0] if station is None else station
+
+    sub_df = df[df["station"] == station]
+    sub_adjoint = get_waveforms(adjoint, station=station)
+    # first plot traces
+    for _, row in sub_df.iterrows():
+        color = _component_colors[row["channel"][-1]]
+        tr_obs, tr_synth = row["tr_obs"], row["tr_synth"]
+        wf_ax.plot(tr_obs.times(), tr_obs.data, "-", color=color, alpha=0.5)
+        wf_ax.plot(tr_synth.times(), tr_synth.data, "--", color=color, alpha=0.5)
+        add_legends(wf_ax)
+    # next plot adjoint
+    for tr in sub_adjoint:
+        color = _component_colors[tr.stats.channel[-1]]
+        ad_ax.plot(tr.times(), tr.data, "-", color=color, alpha=0.5)
+
+    wf_ax.set_title("Waveforms")
+    ad_ax.set_title("Adjoint Source")
+
+    ad_ax.set_xlabel("Time (s)")
+    fig.supylabel("Displacement (m)")
+
+    return fig, (wf_ax, ad_ax)
