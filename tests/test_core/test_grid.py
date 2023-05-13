@@ -12,6 +12,7 @@ class TestConvertToRegularGrid:
         """Ensure weights can be converted to grid and back"""
         coords, array = df_to_grid(weights_kernel, "weights")
         assert len(coords) == 2
+        assert tuple(len(x) for x in coords) == array.shape
 
 
 class TestConvertToDf:

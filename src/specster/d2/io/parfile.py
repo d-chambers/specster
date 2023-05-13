@@ -310,7 +310,7 @@ class Source(SpecsterModel):
         ),
     )
     name_of_source_file: str = Field(
-        "", description="External source time function to use."
+        "YYYYYYYY", description="External source time function to use."
     )
     burst_band_width: SpecFloat = Field(
         0, description="bandwith of burst (for source_time option 9)"

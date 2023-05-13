@@ -17,6 +17,12 @@ from specster.core.plotting import plot_misfit
 from specster.exceptions import UnsetStreamsError
 
 
+def energy_norm(tr):
+    """Calculate the energy norm of a trace."""
+    sq_wf = np.square(tr.data)
+    return np.sqrt(simps(sq_wf, dx=1 / tr.stats.sampling_rate))
+
+
 class BaseMisfit(abc.ABC):
     """An abstract base class for misfit functions."""
 
@@ -44,9 +50,10 @@ class BaseMisfit(abc.ABC):
 
     def preprocess_trace(self, tr):
         """Function for pre-processing traces."""
+        return tr
         out = tr.detrend("linear").taper(self.taper_percentage)
         if self.normalize_traces:
-            out = out.normalize_traces()
+            out = out.normalize()
         return out
 
     def get_misfit(self, st_obs=None, st_synth=None):
@@ -146,6 +153,7 @@ class BaseMisfit(abc.ABC):
         # we need traces with the same stats as synthetic ones.
         base_trace_dict = self._empty_trace_dict_from_df(self.synth_df_)
         for tr in adjoint_list:
+            self.preprocess_trace(tr)
             self._add_traces(base_trace_dict[tr.id], tr)
         return obspy.Stream(list(base_trace_dict.values()))
 
@@ -209,12 +217,14 @@ class WaveformMisfit(BaseMisfit):
         """Calculate the misfit between streams."""
         dx = tr_obs.stats.delta
         misfit = simps((tr_synth.data - tr_obs.data) ** 2, dx=dx)
+        if self.normalize_traces:
+            misfit / energy_norm(tr_obs)
         return misfit
 
     def calc_adjoint(self, tr_obs, tr_synth):
         """Return the adjoint source trace."""
         new = tr_obs.copy()
-        new.data = tr_synth.data - tr_obs.data
+        new.data = tr_synth.data - tr_obs.data  # / energy_norm(tr_obs)
         return new
 
 

@@ -2,11 +2,13 @@
 Output for 2D simulations.
 """
 import re
+import warnings
 from functools import cache, cached_property
 from pathlib import Path
 from typing import List, Literal, Optional, Self, Tuple
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from pydantic import Field
 
@@ -74,10 +76,10 @@ class SPECFEM2DStats(SpecsterModel):
         description="max GLL points per highest p frequency"
     )
     points_per_s_min: float = Field(
-        description="min GLL points per highest s frequency"
+        -1, description="min GLL points per highest s frequency"
     )
     points_per_s_max: float = Field(
-        description="max GLL points per highest s frequency"
+        -1, description="max GLL points per highest s frequency"
     )
     solid_gll_hist: List[GLLHistRow] = Field(
         description="histogram of min points per S wavelength in solid regions"
@@ -155,8 +157,12 @@ class SPECFEM2DStats(SpecsterModel):
             dt=match_between(txt, "for DT :"),
             points_per_p_min=match_between(txt, "Nb pts / lambdaP_fmax min"),
             points_per_p_max=match_between(txt, "Nb pts / lambdaP_fmax max ="),
-            points_per_s_min=match_between(txt, "Nb pts / lambdaS_fmax min ="),
-            points_per_s_max=match_between(txt, "Nb pts / lambdaS_fmax max ="),
+            points_per_s_min=match_between(
+                txt, "Nb pts / lambdaS_fmax min =", default=np.NaN
+            ),
+            points_per_s_max=match_between(
+                txt, "Nb pts / lambdaS_fmax max =", default=np.NaN
+            ),
             solid_gll_hist=cls.parse_histogram(txt, "solid"),
             fluid_gll_hist=cls.parse_histogram(txt, "fluid"),
         )
@@ -169,7 +175,8 @@ class SPECFEM2DStats(SpecsterModel):
         match = re.search(regex, txt, flags=re.MULTILINE)
         if match is None:
             msg = f"unable to find histogram {hist_type}"
-            raise ValueError(msg)
+            warnings.warn(msg)
+            return []
         # pull out lines to read into histogram data
         lines = [
             x.replace("-", "").replace("%", "").split()

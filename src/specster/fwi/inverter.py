@@ -19,7 +19,7 @@ from specster.core.models import SpecsterModel
 from specster.core.optimize import golden_section_search
 from specster.core.parse import read_ascii_stream
 from specster.core.plotting import plot_gll_data
-from specster.core.preconditioner import median_filter
+from specster.core.preconditioner import median_filter, smooth
 from specster.core.printer import console, program_render
 from specster.exceptions import FailedLineSearch
 
@@ -64,6 +64,7 @@ class IterationResults(SpecsterModel):
     data_misfit: float
     model_misfit: Dict[str, float]
     gradient_scalar: float
+    ls_lambda: float
 
 
 class Inverter:
@@ -86,10 +87,10 @@ class Inverter:
     _inverter_save_path = "inverter.pkl"
     _scratch_path = "SCRATCH"
     _iteration_kernel_file_name = "iteration_kernel.parquet"
-    _max_iteration_change = 0.02
-    _linesearch_points = 8
+    _max_iteration_change = 0.04
+    _linesearch_points = 6
     _material_model_file_name = "materials.parquet"
-    _kernel_to_material_map = {"alpha": "vp", "beta": "vs", "rho": "rho"}
+    _kernel_to_material_map = {"alpha": "vp", "beta": "vs", "rho": "rho", "c": "vp"}
 
     def __init__(
         self,
@@ -98,11 +99,10 @@ class Inverter:
         misfit: BaseMisfit,
         true_control: Optional[BaseControl] = None,
         optimization: Literal["steepest descent"] = "steepest descent",
-        stream_pre_processing=None,
         working_path="specster_scratch",
-        pre_conditioner: Literal["default"] = "default",
-        misfit_aggregator=np.linalg.norm,
         kernels=("alpha", "beta"),
+        hessian_preconditioning=True,
+        smoothing_sigma=None,
     ):
         # set input params
         if isinstance(observed_data_path, BaseControl):
@@ -110,17 +110,17 @@ class Inverter:
 
         self._misfit = misfit
         self._optimization = optimization
-        self._stream_pre_process = stream_pre_processing
         self.working_path = Path(working_path)
         self._control, self._true_control = self._create_working_directory(
             observed_data_path,
             control,
             true_control,
         )
-        self._misfit_aggregator = misfit_aggregator
         self._kernel_names = kernels
         self.iteration_results = []
+        self.smoothing_sigma = smoothing_sigma
         self.save_checkpoint()
+        self._hessian_preconditioning = hessian_preconditioning
 
     def _create_working_directory(
         self,
@@ -187,13 +187,19 @@ class Inverter:
             out._true_control = sp.Control2d(base_path / out._control_true_path)
         return out
 
-    def run_iteration(self):
+    def run_iteration(self, no_update=False):
         """
         Run the inversion iteratively.
         """
         iteration = len(self.iteration_results) + 1
         iteration_str = f"Iteration {iteration:d}"
         with program_render(console, title=f"FWI {iteration_str}", supress_output=True):
+            # get the step size the model is allowed to change. This can be
+            # the max value or twice the previous update value.
+            if len(self.iteration_results):
+                best_lambda = self.iteration_results[-1].ls_lambda * 2
+            else:
+                best_lambda = self._max_iteration_change
             start_time = time.time()
             console.rule(f"[bold red]Running FWI ({self.working_path}) {iteration_str}")
             controls = self.get_controls()  # controls for each event
@@ -214,13 +220,17 @@ class Inverter:
             console.print("Conducting line search to find gradient scaling")
             current_material_df = self._control.get_material_model_df()
             self._write_material_df(current_material_df, iteration)
-            grad_scale, new_model = self._line_search(
-                kernels,
-                current_material_df,
-                misfit,
-                controls=controls,
-                console=console,
-            )
+            if not no_update:
+                grad_scale, new_model, best_lambda = self._line_search(
+                    kernels,
+                    current_material_df,
+                    misfit,
+                    controls=controls,
+                    console=console,
+                    upper_bounds=best_lambda,
+                )
+            else:
+                grad_scale, new_model, best_lambda = np.NaN, current_material_df, np.NaN
             maybe_model_misfit = self._calc_model_misfit(new_model)
             self._broadcast_model_updates(new_model)
 
@@ -229,6 +239,7 @@ class Inverter:
                 data_misfit=misfit,
                 model_misfit=maybe_model_misfit,
                 gradient_scalar=grad_scale,
+                ls_lambda=best_lambda,
             )
             self.iteration_results.append(result)
             self.save_checkpoint()
@@ -237,7 +248,13 @@ class Inverter:
         return self
 
     def _line_search(
-        self, kernels, material_df, current_misfit, controls=None, console=None
+        self,
+        kernels,
+        material_df,
+        current_misfit,
+        controls=None,
+        console=None,
+        upper_bounds=None,
     ):
         """Find the optimal update for line search."""
 
@@ -269,7 +286,7 @@ class Inverter:
         best_lambda = golden_section_search(
             _update,
             0,
-            self._max_iteration_change,
+            upper_bounds or self._max_iteration_change,
             max_iter=self._linesearch_points,
         )
         misfits = pd.Series(misfits)
@@ -281,7 +298,7 @@ class Inverter:
         final_delta = -normed_kernels * model_norm * best_lambda
         new_model = m_df + final_delta.values
         new_model["proc"] = procs.values
-        return gradient_scalar, new_model
+        return gradient_scalar, new_model, best_lambda
 
     def _prep_controls_forward_use_model(self, controls=None):
         """Prepare all the controls for a forward run using model databases."""
@@ -296,7 +313,6 @@ class Inverter:
         controls = controls or self.get_controls()
         for control in controls:
             control.set_material_model_df(model)
-            # breakpoint()
         if include_base:
             self._control.set_material_model_df(model)
 
@@ -322,7 +338,8 @@ class Inverter:
         for control in controls:
             kernels = control.output.load_kernel().pipe(self.apply_kernel_conditioning)
             out[control.base_path.name] = kernels
-        return reduce(add, out.values())
+        out = reduce(add, out.values())
+        return out.fillna(0.0)
 
     def apply_kernel_conditioning(self, kernel_df):
         """
@@ -332,14 +349,18 @@ class Inverter:
         around the stations.
         """
         station_df = self._control.get_station_df()
-        new = pd.DataFrame(index=kernel_df.index).pipe(
-            median_filter, station_df=station_df
-        )
-        hess_1 = kernel_df["Hessian1"]
+        new = pd.DataFrame(index=kernel_df.index)
+        if self._hessian_preconditioning:
+            precon = kernel_df["Hessian1"].values + kernel_df["Hessian2"].values
+        else:
+            precon = np.ones(len(kernel_df))
         for kname in self._kernel_names:
-            smooth = kernel_df[kname] / hess_1.values
-            new[kname] = smooth
-        return new
+            precon_kernel = kernel_df[kname] / precon
+            new[kname] = precon_kernel
+        out = new.pipe(median_filter, station_df=station_df)
+        if self.smoothing_sigma:
+            out = smooth(out)
+        return out
 
     def _write_adjoints_to_each_event(self, adjoints, control_list=None):
         """Write the adjoints to disk."""
@@ -348,10 +369,7 @@ class Inverter:
             control.prepare_fwi_adjoint().write_adjoint_sources(adjoint)
 
     def _get_current_event_streams(self):
-        current_streams = [
-            self._preprocess_stream(x.get_waveforms())
-            for x in self._control.each_source_output
-        ]
+        current_streams = [x.get_waveforms() for x in self._control.each_source_output]
         return current_streams
 
     def get_controls(self) -> List[sp.Control2d]:
@@ -380,14 +398,7 @@ class Inverter:
             if include_adjoint:
                 adjoints.append(misfiter.get_adjoint_sources())
         misfit_total_array = np.hstack(misfits)
-        return self._misfit_aggregator(misfit_total_array), adjoints
-
-    def _preprocess_stream(self, st):
-        """Pre-process the stream"""
-        if not callable(self._stream_pre_process):
-            return st.detrend("linear").taper(0.5)
-        else:
-            return self._stream_pre_process(st)
+        return np.linalg.norm(misfit_total_array), adjoints
 
     @property
     def iteration_data_path(self):
@@ -399,12 +410,8 @@ class Inverter:
     @property
     @cache
     def _st_obs_list(self):
-        st_obs_list = [
-            self._preprocess_stream(x)
-            for x in _get_streams_from_each_source_dir(
-                self.working_path / self._observed_path
-            )
-        ]
+        path = self.working_path / self._observed_path
+        st_obs_list = [x for x in _get_streams_from_each_source_dir(path)]
         return st_obs_list
 
     def _write_material_df(self, current_material_df, iteration):

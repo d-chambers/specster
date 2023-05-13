@@ -53,7 +53,7 @@ def plot_single_gll(ax, df, column, coord_labels, max_dist, alpha=None, vlims=No
     coords, vals = df_to_grid(df, column, coords=coord_labels, max_dist=max_dist)
     extents = [min(coords[0]), max(coords[0]), min(coords[1]), max(coords[1])]
     im = ax.imshow(
-        vals, origin="lower", extent=extents, alpha=alpha, vmin=vmin, vmax=vmax
+        vals.T, origin="lower", extent=extents, alpha=alpha, vmin=vmin, vmax=vmax
     )
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)

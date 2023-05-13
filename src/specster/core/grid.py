@@ -5,7 +5,7 @@ Useful for converting to/from GLL binary fromat and regular
 rectangular format (hopefully with minimal loss).
 """
 import numpy as np
-from scipy.interpolate import NearestNDInterpolator
+from scipy.interpolate import NearestNDInterpolator, RegularGridInterpolator
 from scipy.interpolate.interpnd import _ndim_coords_from_arrays
 from scipy.spatial import cKDTree
 
@@ -35,7 +35,7 @@ def df_to_grid(df, column, coords=("x", "z"), max_dist=4):
     xz = df[["x", "z"]].values
     new_coords, dx = _get_regularly_sampled_coords(xz)
     old_coords = df[list(coords)].values
-    X, Y = np.meshgrid(*new_coords)
+    X, Y = np.meshgrid(*new_coords, indexing="ij")
     # interp = LinearNDInterpolator(old_coords, df[column], fill_value=0.0)
     interp = NearestNDInterpolator(old_coords, df[column])
     out = interp(X, Y)
@@ -48,9 +48,13 @@ def df_to_grid(df, column, coords=("x", "z"), max_dist=4):
     return new_coords, out
 
 
-def grid_to_df(grid_coords, values, df_coords):
+def grid_to_df(grid_coords, values, df, coords=("x", "z")):
     """
     Go back from a grid to a dataframe (list-like) coords.
     """
-    # inter = RegularGridInterpolator(grid_coords, values)
-    # # breakpoint()
+    inter = RegularGridInterpolator(grid_coords, values)
+    if not set(df.columns) & set(coords):
+        df = df.reset_index()
+    xz = df[["x", "z"]].values
+    out = inter(xz)
+    return out
