@@ -1,7 +1,7 @@
 """
 Module to interpolate values onto regular grids.
 
-Useful for converting to/from GLL binary fromat and regular
+Useful for converting to/from GLL binary format and regular
 rectangular format (hopefully with minimal loss).
 """
 import numpy as np
