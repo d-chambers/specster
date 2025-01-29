@@ -34,7 +34,7 @@ class GLLHistRow(SpecsterModel):
     @classmethod
     def from_args(cls, args):
         """Init from args, assuming args are the same as field order."""
-        fields = list(cls.__fields__)
+        fields = list(cls.model_fields)
         assert len(args) == len(fields)
         kwargs = {i: v for i, v in zip(fields, args)}
         return cls(**kwargs)

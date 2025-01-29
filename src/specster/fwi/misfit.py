@@ -10,7 +10,7 @@ import obspy
 import pandas as pd
 from obsplus.utils.time import to_utc
 from obspy.signal.cross_correlation import correlate, xcorr_max
-from scipy.integrate import simps
+from scipy.integrate import simpson
 
 from specster.core.misc import get_stream_summary_df
 from specster.core.plotting import plot_misfit
@@ -20,7 +20,7 @@ from specster.exceptions import UnsetStreamsError
 def energy_norm(tr):
     """Calculate the energy norm of a trace."""
     sq_wf = np.square(tr.data)
-    return np.sqrt(simps(sq_wf, dx=1 / tr.stats.sampling_rate))
+    return np.sqrt(simpson(sq_wf, dx=1 / tr.stats.sampling_rate))
 
 
 class BaseMisfit(abc.ABC):

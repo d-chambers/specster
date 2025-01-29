@@ -137,7 +137,7 @@ class BaseControl:
         path = path or Path(tempfile.TemporaryDirectory().name)
         path = Path(path)
         assert not path.is_file(), "must pass a directory."
-        new = copy.deepcopy(self)
+        new = copy.deepcopy(self).reset_file_paths()
         new._writen = False
         new._read_only = False
         new.base_path = path
@@ -147,6 +147,11 @@ class BaseControl:
             exclude=exclude,
         )
         return new
+
+    def reset_file_paths(self):
+        """Reset the file paths used in the par file to default names."""
+        self.par.internal_meshing.interfacesfile = "interfaces.dat"
+        return self
 
     def write(self, path: Optional[Path] = None, overwrite: bool = False) -> Self:
         """
@@ -175,6 +180,7 @@ class BaseControl:
         for name, template in templates.items():
             path = paths[name]
             self._render_template(template, disp, path, overwrite)
+        # self._write()
         return self
 
     def _render_template(self, temp, disp, path, overwrite=False):

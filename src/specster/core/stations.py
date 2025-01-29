@@ -55,7 +55,7 @@ class Station2D(SpecsterModel):
     def write_model_data(self, key=None):
         """Write the model data to disk."""
         out = []
-        for field in self.__fields__:
+        for field in self.model_fields:
             val = getattr(self, field)
             if field in self._decimal_precision:
                 prec = ".0{dec}f".format(dec=self._decimal_precision.get(field))

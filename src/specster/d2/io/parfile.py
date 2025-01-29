@@ -2,19 +2,21 @@
 Module for reading/writing parfiles.
 """
 import fnmatch
+
 import re
 from pathlib import Path
-from typing import List, Literal, Optional, Self
+from typing import List, Literal, Optional, Self, ClassVar
 
 from pydantic import Field
 
 from specster.constants import _ENUM_MAP, _MEANING_MAP
 from specster.core.misc import find_file_startswith, write_model_data
-from specster.core.models import AbstractParameterModel, SpecFloat, SpecsterModel
+from specster.core.models import AbstractParameterModel, SpecFloat, SpecsterModel, spec_str_to_float
 from specster.core.parse import extract_parline_key_value, iter_file_lines
 from specster.core.render import dict_to_description
 from specster.core.stations import Station2D, read_stations
 from specster.exceptions import UnhandledParFileLine
+
 
 SOURCE_REG = re.compile(fnmatch.translate("source*"), re.IGNORECASE)
 
@@ -25,19 +27,20 @@ SOURCE_REG = re.compile(fnmatch.translate("source*"), re.IGNORECASE)
 class AbstractMaterialModelType(SpecsterModel):
     """Abstract type for material models."""
 
-    # model_type: str = "-10"
-    _type_cls_map = {}  # {type: cls}
+    # specfem_model_type: str = "-10"
+    _type_cls_map: ClassVar[dict] = {}  # {type: cls}
 
     def __init_subclass__(cls, **kwargs):
-        default = cls.__fields__["model_type"].default
+        default = getattr(cls, "specfem_model_type")
         cls._type_cls_map[default] = cls
 
     @classmethod
     def read_line(cls, line):
         """Read lines to create class instance."""
         params = line.split("#")[0].split()
-        model_typ = cls.__fields__["model_type"].default
-        assert params[1] == model_typ, "Wrong model type!"
+        specfem_model_type = cls.model_fields["specfem_model_type"].default
+        # model_typ = cls.model_fields["specfem_model_type"].default
+        assert params[1] == specfem_model_type, "Wrong model type!"
         # need to strip out model type, if we got here its already handled.
         return super().read_line(params)
 
@@ -50,15 +53,15 @@ class ElasticModel(AbstractMaterialModelType):
 
     Here are some examples from the par file how these look:
     acoustic example:
-        model_number 1 rho Vp 0  0 0 QKappa 9999 0 0 0 0 0 0
+        specfem_model_number 1 rho Vp 0  0 0 QKappa 9999 0 0 0 0 0 0
             (for QKappa use 9999 to ignore it)
     elastic example:
-        model_number 1 rho Vp Vs 0 0 QKappa Qmu  0 0 0 0 0 0
+        specfem_model_number 1 rho Vp Vs 0 0 QKappa Qmu  0 0 0 0 0 0
             (for QKappa and Qmu use 9999 to ignore them)
     """
 
-    model_number: int
-    model_type: Literal["1"] = "1"  # fixed type
+    specfem_model_number: int
+    specfem_model_type: Literal["1"] = "1"  # fixed type
     rho: SpecFloat = Field(description="density")
     Vp: SpecFloat = Field(description="P velocity")
     Vs: SpecFloat = Field(description="S velocity")
@@ -81,13 +84,13 @@ class AnisotropicModel(AbstractMaterialModelType):
     Here are some examples from the par file how these look:
 
     anisotropic:
-        model_number 2 rho c11 c13 c15 c33 c35 c55 c12 c23 c25   0 QKappa Qmu
+        specfem_model_number 2 rho c11 c13 c15 c33 c35 c55 c12 c23 c25   0 QKappa Qmu
     anisotropic in AXISYM:
-        model_number 2 rho c11 c13 c15 c33 c35 c55 c12 c23 c25 c22 QKappa Qmu
+        specfem_model_number 2 rho c11 c13 c15 c33 c35 c55 c12 c23 c25 c22 QKappa Qmu
     """
 
-    model_number: int
-    model_type: Literal["2"] = "2"  # fixed type
+    specfem_model_number: int
+    specfem_model_type: Literal["2"] = "2"  # fixed type
     rho: SpecFloat = Field(description="density")
     c11: SpecFloat
     c13: SpecFloat
@@ -106,8 +109,8 @@ class AnisotropicModel(AbstractMaterialModelType):
 class PoroelasticModel(AbstractMaterialModelType):
     """Model describing poroelastic material"""
 
-    model_number: int
-    model_type: Literal["3"] = "3"  # fixed type
+    specfem_model_number: int
+    specfem_model_type: Literal["3"] = "3"  # fixed type
     rhos: SpecFloat
     rhof: SpecFloat
     phi: SpecFloat
@@ -123,11 +126,30 @@ class PoroelasticModel(AbstractMaterialModelType):
     Qmu: SpecFloat
 
 
+class ElectroMagneticModel(AbstractMaterialModelType):
+    """Model describing electromagnetic material"""
+    specfem_model_number: int
+    specfem_model_type: Literal["4"] = "4"  # fixed type
+    mu0: SpecFloat
+    e0: SpecFloat
+    e11: SpecFloat
+    e33: SpecFloat
+    sig11: SpecFloat
+    sig33: SpecFloat
+    Qe11: SpecFloat
+    Qe33: SpecFloat
+    Qs11: SpecFloat
+    Qs33: SpecFloat
+    void1_: str = "0"
+    void2_: str = "0"
+    void3_: str = "0"
+
+
 class TomoModel(AbstractMaterialModelType):
     """Tomography model?"""
 
-    model_number: int
-    model_type: Literal["-1"] = "-1"  # fixed type
+    specfem_model_number: int
+    specfem_model_type: Literal["-1"] = "-1"  # fixed type
     void1_: str = "0"
     void2_: str = "0"
     void3_: str = "0"
@@ -161,21 +183,21 @@ class MaterialModels(AbstractParameterModel):
     @classmethod
     def read_material_properties(cls, value, iterator, **kwargs):
         """Read material properties"""
-        model_type_key = AbstractMaterialModelType._type_cls_map
+        specfem_model_type_key = AbstractMaterialModelType._type_cls_map
         out = {
             "nbmodels": int(value),
             "models": [],
         }
         for _ in range(int(value)):
             line = next(iterator)
-            model_type = model_type_key[line.split()[1]]
-            out["models"].append(model_type.read_line(line))
+            specfem_model_type = specfem_model_type_key[line.split()[1]]
+            out["models"].append(specfem_model_type.read_line(line))
         # now read tomography (TODO: Is this the right place?)
-        expected = {"tomography_file"}
-        for _ in range(len(expected)):
-            key, value = extract_parline_key_value(next(iterator))
-            assert key in expected
-            out[key] = value
+        # expected = {"tomography_file"}
+        # for _ in range(len(expected)):
+        #     key, value = extract_parline_key_value(next(iterator))
+        #     assert key in expected
+        #     out[key] = value
         return cls(**out)
 
 
@@ -193,7 +215,7 @@ class Region2D(SpecsterModel):
 
     def write_model_data(self, key: Optional[str] = None):
         """Write data to file."""
-        field_names = [f"{getattr(self, x):d}" for x in self.__fields__]
+        field_names = [f"{getattr(self, x):d}" for x in self.model_fields]
         out = " ".join(field_names)
         return out
 
@@ -258,7 +280,7 @@ class Attenuation(AbstractParameterModel):
     )
     n_sls: int = Field(
         3,
-        ge=3,
+        ge=2,
         description="number of standard linear solids for attenuation",
     )
     attenuation_f0_reference: SpecFloat = Field(
@@ -272,7 +294,7 @@ class Attenuation(AbstractParameterModel):
         False,
         description="More precise/expansive way to get relaxation times",
     )
-    attenuation_poro_fluid_part = Field(
+    attenuation_poro_fluid_part: bool = Field(
         False, description="attenuation for the fluid part of poroelastic parts"
     )
     q0_poroelastic: SpecFloat = Field(
@@ -281,6 +303,16 @@ class Attenuation(AbstractParameterModel):
     freq0_poroelastic: SpecFloat = Field(
         10,
         description="frequency for viscous attenuation",
+    )
+    # Electro magentic stuff.
+    attenuation_permittivity: bool = Field(
+        False, description="",
+    )
+    attenuation_conductivity: bool = Field(
+        False, description="",
+    )
+    f0_electromagnetic: SpecFloat = Field(
+        1000.0, description="",
     )
     undo_attenuation_and_or_pml: bool = Field(
         False, description="Undo attenuation for sensitivity kernel calc."
@@ -393,7 +425,7 @@ class Sources(AbstractParameterModel):
                     sources.append(Source(**source_kwargs))
                 source_kwargs[key] = value_
             # also need to scoop up last event
-            sources.append(Source(**source_kwargs))
+            sources.append(Source.model_validate(source_kwargs))
         return sources
 
 
@@ -465,7 +497,7 @@ class ReceiverSets(AbstractParameterModel):
 class Receivers(AbstractParameterModel):
     """Controls the receiver parameters (under Receiver section)."""
 
-    seismotype: Literal["1", "2", "3", "4", "5", "6"] = Field(
+    seismotype: str = Field(
         "1", description=dict_to_description("seismotype", _ENUM_MAP["seismotype"])
     )
     ntstep_between_output_seismos: int = Field(
@@ -620,7 +652,7 @@ class Interfaces(SpecsterModel):
             point_list = []
             num_points = int(next(lines))
             for _ in range(num_points):
-                point_tup = tuple(float(x) for x in next(lines).split())
+                point_tup = tuple(spec_str_to_float(x) for x in next(lines).split())
                 point_list.append(point_tup)
             layers.append(point_list)
         # read the number of elements
@@ -835,6 +867,7 @@ class SpecParameters2D(AbstractParameterModel):
 _SPECIAL_KEYS = {
     "nbregions": (Regions.read_regions, "regions"),
     "nbmodels": (MaterialModels.read_material_properties, "material_models"),
+    # "tomography_file": ("")
     "nreceiversets": (ReceiverSets.read_receiver_sets, "receiver_sets"),
     "nsources": (Sources.read_sources, "sources"),
     "use_existing_stations": (read_stations, "stations"),

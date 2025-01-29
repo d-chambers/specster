@@ -41,7 +41,7 @@ class Settings(SpecsterModel):
     )
 
     ci: bool = Field(
-        env="CI",
+        validation_alias="CI",
         default=False,
         description="If running on continuous integration.",
     )

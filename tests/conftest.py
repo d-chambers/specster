@@ -24,7 +24,11 @@ TEST_DATA_2D_PATH = TEST_PATH_2D / "test_data"
 
 # Path to the example directory
 if specster.settings.specfem2d_path is None:
-    msg = "Cannot run 2D tests until specfem2d path is set!"
+    msg = (
+        "Cannot run 2D tests until SPECFEM2D_PATH env variable"
+        " is set!"
+    )
+
     raise ValueError(msg)
 
 EXAMPLE_PATH = specster.settings.specfem2d_path / "EXAMPLES"
@@ -32,6 +36,13 @@ EXAMPLE_PATH = specster.settings.specfem2d_path / "EXAMPLES"
 PAR_FILES = list(EXAMPLE_PATH.rglob("Par_file*"))
 
 SOURCE_FILES = list(EXAMPLE_PATH.rglob("SOURCE*"))
+
+SPECFEM2D_PATH = TEST_PATH_2D / "SPECFEM2D"
+
+# Examples to skip becauseh they have something wrong with them.
+SKIP_EXAMPLES = {
+    "Marmousi_mesh_of_the_model", # bad regions
+}
 
 
 def pytest_sessionstart(session):
@@ -79,8 +90,10 @@ def weights_kernel(kernel_2d_dir_path):
 @cache
 def get_data_directories():
     """Get a list of data directories in examples cases."""
-
-    out = tuple(x for x in EXAMPLE_PATH.rglob("DATA"))
+    out = tuple(
+        x for x in EXAMPLE_PATH.rglob("DATA")
+        if not x.parent.name in SKIP_EXAMPLES
+    )
     return out
 
 
@@ -96,7 +109,8 @@ def default_data_path(tmp_path_factory) -> Path:
 @pytest.fixture(scope="session", params=get_data_directories())
 def data_dir_path(request):
     """Fixture to iterate over data directory and return examples."""
-    return Path(request.param)
+    path = request.param
+    return Path(path)
 
 
 @pytest.fixture(scope="session", params=PAR_FILES)

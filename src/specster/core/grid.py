@@ -6,8 +6,30 @@ rectangular format (hopefully with minimal loss).
 """
 import numpy as np
 from scipy.interpolate import NearestNDInterpolator, RegularGridInterpolator
-from scipy.interpolate.interpnd import _ndim_coords_from_arrays
 from scipy.spatial import cKDTree
+
+
+def _ndim_coords_from_arrays(points):
+    """
+    Convert a tuple of coordinate arrays to a (..., ndim)-shaped array.
+
+    """
+    if isinstance(points, tuple) and len(points) == 1:
+        # handle argument tuple
+        points = points[0]
+    if isinstance(points, tuple):
+        p = np.broadcast_arrays(*points)
+        for j in range(1, len(p)):
+            if p[j].shape != p[0].shape:
+                raise ValueError("coordinate arrays do not have the same shape")
+        points = np.empty(p[0].shape + (len(points),), dtype=float)
+        for j, item in enumerate(p):
+            points[...,j] = item
+    else:
+        points = np.asanyarray(points)
+        if points.ndim == 1:
+            points = points.reshape(-1, 1)
+    return points
 
 
 def get_average_dx(array):

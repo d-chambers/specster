@@ -45,6 +45,8 @@ def find_data_path(path):
     """Look for the data path."""
     if path.name.startswith("DATA"):
         return path
+    elif path.parent.name.startswith("DATA"):
+        return path.parent
     return path / "DATA"
 
 
@@ -107,8 +109,8 @@ def assert_floats_nearly_equal(val1, val2, tolerance=0.0001):
 
 def assert_models_equal(model1, model2):
     """Walk the models and assert they are equal (helps find unequal parts)"""
-    if hasattr(model1, "__fields__") and hasattr(model2, "__fields__"):
-        f1, f2 = set(model1.__fields__), set(model2.__fields__)
+    if hasattr(model1, "model_fields") and hasattr(model2, "model_fields"):
+        f1, f2 = set(model1.model_fields), set(model2.model_fields)
         assert set(f1) == set(f2)
         # iterate each key, recursively apply model equals
         for key in f1:
@@ -124,6 +126,8 @@ def assert_models_equal(model1, model2):
     # simply recurse for other models
     elif isinstance(model1, BaseModel) and isinstance(model2, BaseModel):
         assert_models_equal(model1, model2)
+    elif isinstance(model1, Path):
+        pass  # some paths won't be equal
     else:  # anything else should be equal
         assert model1 == model2
 
@@ -139,7 +143,7 @@ def get_control_default_path(control: Literal["2D", "3D", None] = "2D") -> Path:
 
 def write_model_data(self, key: Optional[str] = None):
     """Write the model data."""
-    param_list = [self.get_formatted_str(x) for x in self.__fields__]
+    param_list = [self.get_formatted_str(x) for x in self.model_fields]
     return " ".join(param_list)
 
 
