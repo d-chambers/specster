@@ -1,6 +1,7 @@
 """
 A module for calling out to specfem programs.
 """
+
 import subprocess
 from time import sleep, time_ns
 

@@ -1,10 +1,12 @@
 """
 Module for handling specster's settings/behavior.
 """
+
+from __future__ import annotations
+
 import os
 from functools import partial
 from pathlib import Path
-from typing import Optional
 
 from pydantic import Field
 
@@ -21,14 +23,14 @@ def maybe_load_env_path(name):
 class Settings(SpecsterModel):
     """Global settings for specster."""
 
-    specfem2d_bin_path: Optional[Path] = Field(
+    specfem2d_bin_path: Path | None = Field(
         default_factory=partial(
             maybe_load_env_path,
             name="SPECFEM_BIN_PATH",
         ),
         description="Path to folder containing specfem binaries",
     )
-    specfem2d_path: Optional[Path] = Field(
+    specfem2d_path: Path | None = Field(
         default_factory=partial(
             maybe_load_env_path,
             name="SPECFEM2D_PATH",
@@ -36,7 +38,7 @@ class Settings(SpecsterModel):
         description="Path to folder containing specfem2D source",
     )
 
-    package_path: Optional[Path] = Field(
+    package_path: Path | None = Field(
         default_factory=lambda: Path(__file__).parent.absolute(),
     )
 
@@ -47,7 +49,7 @@ class Settings(SpecsterModel):
     )
 
     def get_specfem2d_binary_path(self):
-        """ "Get the binary path to specfem 2D."""
+        """Get the binary path to specfem 2D."""
         spec_bin_path = self.specfem2d_bin_path
         if not spec_bin_path or not Path(spec_bin_path).exists():
             spec_path = self.specfem2d_path
@@ -60,7 +62,7 @@ class Settings(SpecsterModel):
         return spec_bin_path
 
 
-def write_settings(path, settings: Optional[Settings] = None):
+def write_settings(path, settings: Settings | None = None):
     """
     Write the settings to disk as a simple json file.
 
@@ -72,7 +74,7 @@ def write_settings(path, settings: Optional[Settings] = None):
         A settings object, if None use the global settings.
     """
     settings = settings if settings is not None else specster.settings
-    json = settings.json()
+    json = settings.model_dump_json()
     with Path(path).open("w") as fi:
         fi.write(json)
 
@@ -88,7 +90,9 @@ def read_settings(path, use_settings=False):
     use_settings
         If True, set the loading settings to the global default.
     """
-    settings = Settings.parse_file(path)
+    with path.open() as fi:
+        data = fi.read()
+    settings = Settings.model_validate_json(data)
     if use_settings:
         specster.settings = settings
     return settings

@@ -1,12 +1,12 @@
 """
 Tests for parsing functions.
 """
+
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
-
 from specster.core.parse import read_binaries_in_directory, write_directory_binaries
 
 test_data_path = Path(__file__).parent / "test_data" / "bin_directory"

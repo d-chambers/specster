@@ -1,6 +1,7 @@
 """
 Module for printing things to the screen.
 """
+
 from contextlib import contextmanager
 
 from rich.console import Console
@@ -19,7 +20,7 @@ class SilentDummy:
     """A class to just swallow any attrs."""
 
     def print(self, *args, **kwargs):
-        """prints something"""
+        """Prints something"""
         pass
 
     def rule(self, *args, **kwargs):
@@ -35,7 +36,6 @@ class SilentDummy:
 @contextmanager
 def program_render(console, title="", path="", supress_output=False):
     """Render the output of a program."""
-
     if specster.settings.ci or supress_output:  # do nothing on CI
         yield SilentDummy(), None
     else:

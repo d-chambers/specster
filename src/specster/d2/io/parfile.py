@@ -1,22 +1,28 @@
 """
 Module for reading/writing parfiles.
 """
-import fnmatch
 
+from __future__ import annotations
+
+import fnmatch
 import re
 from pathlib import Path
-from typing import List, Literal, Optional, Self, ClassVar
+from typing import ClassVar, Literal, Self
 
 from pydantic import Field
 
 from specster.constants import _ENUM_MAP, _MEANING_MAP
 from specster.core.misc import find_file_startswith, write_model_data
-from specster.core.models import AbstractParameterModel, SpecFloat, SpecsterModel, spec_str_to_float
+from specster.core.models import (
+    AbstractParameterModel,
+    SpecFloat,
+    SpecsterModel,
+    spec_str_to_float,
+)
 from specster.core.parse import extract_parline_key_value, iter_file_lines
 from specster.core.render import dict_to_description
 from specster.core.stations import Station2D, read_stations
 from specster.exceptions import UnhandledParFileLine
-
 
 SOURCE_REG = re.compile(fnmatch.translate("source*"), re.IGNORECASE)
 
@@ -128,6 +134,7 @@ class PoroelasticModel(AbstractMaterialModelType):
 
 class ElectroMagneticModel(AbstractMaterialModelType):
     """Model describing electromagnetic material"""
+
     specfem_model_number: int
     specfem_model_type: Literal["4"] = "4"  # fixed type
     mu0: SpecFloat
@@ -170,10 +177,8 @@ class MaterialModels(AbstractParameterModel):
     Class to hold information about material properties.
     """
 
-    models: List[AbstractMaterialModelType]
-    tomography_file: Optional[Path] = Field(
-        None, description="External tomography file"
-    )
+    models: list[AbstractMaterialModelType]
+    tomography_file: Path | None = Field(None, description="External tomography file")
 
     @property
     def nbmodels(self) -> int:
@@ -213,7 +218,7 @@ class Region2D(SpecsterModel):
     nzmax: int = Field(ge=1, description="ending z element")
     material_number: int = Field(ge=1, description="material applied to region")
 
-    def write_model_data(self, key: Optional[str] = None):
+    def write_model_data(self, key: str | None = None):
         """Write data to file."""
         field_names = [f"{getattr(self, x):d}" for x in self.model_fields]
         out = " ".join(field_names)
@@ -223,7 +228,7 @@ class Region2D(SpecsterModel):
 class Regions(AbstractParameterModel):
     """Tracks regions in the model."""
 
-    regions: List[Region2D]
+    regions: list[Region2D]
 
     @property
     def nbregions(self) -> int:
@@ -306,13 +311,16 @@ class Attenuation(AbstractParameterModel):
     )
     # Electro magentic stuff.
     attenuation_permittivity: bool = Field(
-        False, description="",
+        False,
+        description="",
     )
     attenuation_conductivity: bool = Field(
-        False, description="",
+        False,
+        description="",
     )
     f0_electromagnetic: SpecFloat = Field(
-        1000.0, description="",
+        1000.0,
+        description="",
     )
     undo_attenuation_and_or_pml: bool = Field(
         False, description="Undo attenuation for sensitivity kernel calc."
@@ -399,7 +407,7 @@ class Sources(AbstractParameterModel):
     )
     write_moving_sources_database: bool = Field(False, description="See manual")
 
-    sources: List[Source]
+    sources: list[Source]
 
     @staticmethod
     def read_sources(value, path, **kwargs):
@@ -410,7 +418,7 @@ class Sources(AbstractParameterModel):
         return out
 
     @staticmethod
-    def read_source_file(base_path, file_count=1) -> List[Source]:
+    def read_source_file(base_path, file_count=1) -> list[Source]:
         """Read the source file(s)."""
         sources = []
         iterable = (x for x in base_path.glob("*") if SOURCE_REG.match(str(x.name)))
@@ -464,7 +472,7 @@ class ReceiverSets(AbstractParameterModel):
         False,
         description="base anglerec normal to surface",
     )
-    receiver_sets: List[ReceiverSet]
+    receiver_sets: list[ReceiverSet]
 
     @property
     def nreceiversets(self) -> int:
@@ -531,7 +539,7 @@ class Receivers(AbstractParameterModel):
     receiver_sets: ReceiverSets
 
     # stations from external files
-    stations: List[Station2D]
+    stations: list[Station2D]
 
     # @pydantic.root_validator(pre=True)
     # def get_stations(cls, values):
@@ -595,31 +603,29 @@ class ExternalMeshing(AbstractParameterModel):
     read_external_mesh: bool = Field(
         False, description="read an external mesh for velocity model"
     )
-    mesh_file: Optional[Path] = Field(
-        "./DATA/mesh_file", description="Path to mesh file"
-    )
-    nodes_coords_file: Optional[Path] = Field(
+    mesh_file: Path | None = Field("./DATA/mesh_file", description="Path to mesh file")
+    nodes_coords_file: Path | None = Field(
         "./DATA/nodes_coords_dile", description="Path to mesh coordinates"
     )
-    materials_file: Optional[Path] = Field(
+    materials_file: Path | None = Field(
         "./DATA/material_file", description="Path to material file"
     )
-    free_surface_file: Optional[Path] = Field(
+    free_surface_file: Path | None = Field(
         "./DATA/free_surface_file", description="Path to free surface file"
     )
-    axial_elements_file: Optional[Path] = Field(
+    axial_elements_file: Path | None = Field(
         "./DATA/axial_element_file", description="Path to mesh file"
     )
-    absorbing_surface_file: Optional[Path] = Field(
+    absorbing_surface_file: Path | None = Field(
         "./DATA/absorbing_surface_file", description="Path to mesh file"
     )
-    acoustic_forcing_surface_file: Optional[Path] = Field(
+    acoustic_forcing_surface_file: Path | None = Field(
         "./DATA/Surf_acforcing_Bottom_enforcing_mesh",
     )
-    absorbing_cpml_file: Optional[Path] = Field(
+    absorbing_cpml_file: Path | None = Field(
         "./DATA/absorbing_cpml_file", description="File with CPML element numbers"
     )
-    tangential_detection_curve_file: Optional[Path] = Field(
+    tangential_detection_curve_file: Path | None = Field(
         "./DATA/courbe_eros_nodes", description="Contains curve delineating model"
     )
 
@@ -627,12 +633,12 @@ class ExternalMeshing(AbstractParameterModel):
 class Interfaces(SpecsterModel):
     """Interfaces for the internal meshing."""
 
-    layers: List[List[tuple[float, float]]]
-    z_elements: List[int]
+    layers: list[list[tuple[float, float]]]
+    z_elements: list[int]
 
     @property
     def interface_count(self) -> int:
-        """return the number of interfaces."""
+        """Return the number of interfaces."""
         return len(self.layers)
 
     @staticmethod
@@ -664,7 +670,7 @@ class Interfaces(SpecsterModel):
 class InternalMeshing(AbstractParameterModel):
     """Controls the internal meshing parameters."""
 
-    interfacesfile: Optional[Path] = Field(
+    interfacesfile: Path | None = Field(
         "./DATA/interfaces.dat", description="File with interfaces"
     )
     interfaces: Interfaces

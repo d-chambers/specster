@@ -1,12 +1,12 @@
 """
 Tests for misfit functions.
 """
+
 import matplotlib.pyplot as plt
 import numpy as np
 import obspy
 import pandas as pd
 import pytest
-
 from specster.core.misc import get_stream_summary_df
 from specster.exceptions import UnsetStreamsError
 from specster.fwi import AmplitudeMisfit, TravelTimeMisfit, WaveformMisfit

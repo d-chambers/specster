@@ -1,9 +1,9 @@
 """Tests for pre-conditioning."""
+
 from pathlib import Path
 
 import pandas as pd
 import pytest
-
 from specster.core.preconditioner import median_filter, smooth
 
 here = Path(__file__).parent

@@ -3,7 +3,6 @@ Tests for reading par files.
 """
 
 import pytest
-
 import specster.core.stations
 import specster.d2.io.parfile as pf
 
@@ -112,8 +111,3 @@ class TestDisp:
         assert len(title)
         title_2 = param_display.TITLE
         assert title_2 == title
-
-    def test_recursive_display(self, param_display):
-        """This should work for nested display as well."""
-        # sub = param_display.visualizations
-        # sub.postscript_display

@@ -1,11 +1,11 @@
 """
 Tests for control class.
 """
+
 import shutil
 from pathlib import Path
 
 import pytest
-
 import specster as sp
 from specster.core.misc import assert_models_equal, load_cache
 from specster.d2.control2d import load_2d_example

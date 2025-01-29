@@ -1,8 +1,8 @@
 """
 Tests for plotting kernels.
 """
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
 from specster.core.plotting import plot_gll_data
 
 

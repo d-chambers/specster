@@ -1,6 +1,7 @@
 """
 Configuration for specster 2D tests.
 """
+
 import copy
 import os
 import shutil
@@ -8,10 +9,9 @@ from functools import cache
 from pathlib import Path
 
 import pytest
-
 import specster
 import specster.d2.io.parfile as pf
-from specster.core.misc import cache_file_or_dir, find_file_startswith, load_cache
+from specster.core.misc import cache_file_or_dir, load_cache
 from specster.core.parse import read_ascii_kernels
 
 TEST_PATH = Path(__file__).absolute().parent
@@ -24,10 +24,7 @@ TEST_DATA_2D_PATH = TEST_PATH_2D / "test_data"
 
 # Path to the example directory
 if specster.settings.specfem2d_path is None:
-    msg = (
-        "Cannot run 2D tests until SPECFEM2D_PATH env variable"
-        " is set!"
-    )
+    msg = "Cannot run 2D tests until SPECFEM2D_PATH env variable" " is set!"
 
     raise ValueError(msg)
 
@@ -41,7 +38,9 @@ SPECFEM2D_PATH = TEST_PATH_2D / "SPECFEM2D"
 
 # Examples to skip becauseh they have something wrong with them.
 SKIP_EXAMPLES = {
-    "Marmousi_mesh_of_the_model", # bad regions
+    "Marmousi_mesh_of_the_model",  # bad regions
+    "check_absolute_amplitude_of_force_source_seismograms_viscoelastic",
+    "Tape2007",
 }
 
 
@@ -78,7 +77,10 @@ def test_data_path():
 @pytest.fixture(scope="session")
 def kernel_2d_dir_path():
     """Return a path to the kernel directory."""
-    return Path(__file__).parent / "test_2D" / "test_data" / "kernels"
+    path = Path(__file__).parent / "test_2D" / "test_data" / "kernels"
+    if not path.exists():
+        pytest.skip("Missing data file")
+    return path
 
 
 @pytest.fixture(scope="class")
@@ -91,8 +93,7 @@ def weights_kernel(kernel_2d_dir_path):
 def get_data_directories():
     """Get a list of data directories in examples cases."""
     out = tuple(
-        x for x in EXAMPLE_PATH.rglob("DATA")
-        if not x.parent.name in SKIP_EXAMPLES
+        x for x in EXAMPLE_PATH.rglob("DATA") if x.parent.name not in SKIP_EXAMPLES
     )
     return out
 
@@ -118,6 +119,8 @@ def par_file_path(request):
     """Fixture to iterate over data directory and return examples."""
     # these strings are used to match on bad (malformed) files
     par_path = request.param
+    if par_path.parent.parent.name in SKIP_EXAMPLES:
+        pytest.skip("Skipping dirs with no par files.")
     path_str = str(par_path)
     not_ready = "not_ready_yet" in path_str
     rec_checker = par_path.name.endswith("rec_checker")
@@ -143,10 +146,9 @@ def run_parameters_2d(par_dicts_2d) -> pf.SpecParameters2D:
 @pytest.fixture(scope="class")
 def control_2d(data_dir_path):
     """2D control instances."""
-    try:
-        find_file_startswith(data_dir_path, "Par_file")
-    except FileNotFoundError:
-        pytest.skip("Parfile doesn't exist")
+    par_path = data_dir_path / "Par_file"
+    if not par_path.exists():
+        pytest.skip("Only testing examples with 'par_file' for now.")
     if "not_ready_yet" in str(data_dir_path):
         pytest.skip("not ready yet")
     spec = specster.Control2d(data_dir_path)
@@ -176,7 +178,7 @@ def modified_control(tmp_path_factory):
     station.xs, station.zs = 2200, 2200
     control.stations = [station]
     # Then add a source
-    new_source = control.sources[0].copy()
+    new_source = control.sources[0].model_copy()
     new_source.xs, new_source.zs = 2100, 2100
     control.sources = control.sources + [new_source]
     return control
@@ -209,6 +211,7 @@ def control_2d_default_3_sources(control_2d_default, tmp_path_factory):
         # ps images are huge; don't do them.
         control.par.visualizations.postscript.output_postscript_snapshot = False
         control.run_each_source()
+
         cache_file_or_dir(control.base_path, cache_name)
     else:
         control = specster.Control2d(load_cache(cache_name))

@@ -1,6 +1,7 @@
 """
 Module for working with station data.
 """
+
 from pathlib import Path
 
 from pydantic import Field
@@ -58,7 +59,7 @@ class Station2D(SpecsterModel):
         for field in self.model_fields:
             val = getattr(self, field)
             if field in self._decimal_precision:
-                prec = ".0{dec}f".format(dec=self._decimal_precision.get(field))
+                prec = f".0{self._decimal_precision.get(field)}f"
                 str_val = ("{val:" + f"{prec}" + "}").format(val=float(val))
             else:
                 str_val = f"{val}"

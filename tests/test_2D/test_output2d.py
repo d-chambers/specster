@@ -1,6 +1,7 @@
 """
 Tests for 2d output object.
 """
+
 import matplotlib.pyplot as plt
 import obspy
 import pandas as pd
@@ -16,7 +17,7 @@ def plotting_control(modified_control, tmp_path_factory):
 
 @pytest.fixture(scope="class")
 def basic_output(modified_control_ran):
-    """return output object from modified control run."""
+    """Return output object from modified control run."""
     return modified_control_ran.output
 
 

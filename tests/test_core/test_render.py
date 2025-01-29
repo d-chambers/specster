@@ -1,10 +1,10 @@
 """
 Tests for rendering logic.
 """
+
 import re
 
 import pytest
-
 from specster.core.misc import load_templates_text_from_directory
 
 

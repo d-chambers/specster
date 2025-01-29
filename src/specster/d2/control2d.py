@@ -1,12 +1,13 @@
 """
 Main control class for interacting with specfem.
 """
+
 from __future__ import annotations
 
 import shutil
 from functools import partial
 from pathlib import Path
-from typing import List, Optional, Self
+from typing import Self
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -59,16 +60,16 @@ class Control2d(BaseControl):
 
     @property
     def output(self) -> OutPut2D:
-        """return the output of the control."""
+        """Return the output of the control."""
         return OutPut2D(self.output_path, self)
 
     @property
-    def each_source_output(self) -> List[OutPut2D]:
+    def each_source_output(self) -> list[OutPut2D]:
         """Return an output for each source."""
         sorted_event_paths = sorted(x for x in self.each_source_path.iterdir())
         return [OutPut2D(x / "OUTPUT_FILES", self) for x in sorted_event_paths]
 
-    def run(self, output_path: Optional[Path] = None, supress_output=False) -> OutPut2D:
+    def run(self, output_path: Path | None = None, supress_output=False) -> OutPut2D:
         """Run the simulation."""
         # Determine if internal mesher should be run
         use_stations = self.par.receivers.use_existing_stations

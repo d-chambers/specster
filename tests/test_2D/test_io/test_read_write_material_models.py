@@ -1,9 +1,9 @@
 """
 Tests for reading and writing material models to DATA directory.
 """
+
 import pandas as pd
 import pytest
-
 import specster
 
 
@@ -22,7 +22,7 @@ def control_with_datafiles(control_2d_default, tmp_path_factory) -> specster.Con
 
 @pytest.fixture(scope="class")
 def materials_df(control_with_datafiles):
-    """return material dataframe created."""
+    """Return material dataframe created."""
     return control_with_datafiles.get_material_model_df()
 
 

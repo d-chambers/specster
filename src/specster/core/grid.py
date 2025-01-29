@@ -4,6 +4,7 @@ Module to interpolate values onto regular grids.
 Useful for converting to/from GLL binary format and regular
 rectangular format (hopefully with minimal loss).
 """
+
 import numpy as np
 from scipy.interpolate import NearestNDInterpolator, RegularGridInterpolator
 from scipy.spatial import cKDTree
@@ -12,7 +13,6 @@ from scipy.spatial import cKDTree
 def _ndim_coords_from_arrays(points):
     """
     Convert a tuple of coordinate arrays to a (..., ndim)-shaped array.
-
     """
     if isinstance(points, tuple) and len(points) == 1:
         # handle argument tuple
@@ -24,7 +24,7 @@ def _ndim_coords_from_arrays(points):
                 raise ValueError("coordinate arrays do not have the same shape")
         points = np.empty(p[0].shape + (len(points),), dtype=float)
         for j, item in enumerate(p):
-            points[...,j] = item
+            points[..., j] = item
     else:
         points = np.asanyarray(points)
         if points.ndim == 1:
@@ -64,9 +64,9 @@ def df_to_grid(df, column, coords=("x", "z"), max_dist=4):
     # Nan out points with distance gt than 2DX. This is needed because
     # specfem files don't store 0s of values above topography.
     tree = cKDTree(old_coords)
-    xi = _ndim_coords_from_arrays((X, Y), ndim=old_coords.shape[1])
+    xi = _ndim_coords_from_arrays((X, Y))  #  ndim=old_coords.shape[1])
     dists, indexes = tree.query(xi)
-    out[dists > max_dist * dx] = np.NaN
+    out[dists > max_dist * dx] = np.nan
     return new_coords, out
 
 

@@ -1,10 +1,12 @@
 """
 Utils module to help parse specfem files.
 """
+
+from __future__ import annotations
+
 import warnings
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict
 
 import numpy as np
 import obspy
@@ -23,7 +25,7 @@ def extract_parline_key_value(line):
 
 def iter_file_lines(path, ignore="#"):
     """Read lines of a file, dont include comment lines."""
-    with open(path, "r") as fi:
+    with open(path) as fi:
         for line in fi.readlines():
             stripped = line.strip()
             if stripped.startswith(ignore) or not stripped:
@@ -94,7 +96,6 @@ def read_specfem_binary(path):
 
     Notes
     -----
-
     Based on:
     https://github.com/adjtomo/seisflows/blob/c7ef6b4bdb96b1d8ca223cb104b2190c3c9571fb
     /seisflows/tools/specfem.py#L247
@@ -142,7 +143,7 @@ def write_specfem_binary(data, path):
         data_size_in_bytes.tofile(fi)
 
 
-def read_waveform_source_directory(path) -> Dict[str, obspy.Stream]:
+def read_waveform_source_directory(path) -> dict[str, obspy.Stream]:
     """Read waveforms into source dictionary."""
     path = Path(path)
     out = {}

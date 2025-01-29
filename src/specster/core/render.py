@@ -1,9 +1,10 @@
 """
 A module for rendering specdata into text.
 """
+
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import specster
 
@@ -27,6 +28,9 @@ class Displayer:
         self._model = model
 
     def __getattr__(self, item):
+        # This liberal getattr messes with deep copy.
+        if item == "__deepcopy__":
+            return None
         key = item.lower()
         if key == "_model":
             return
@@ -45,7 +49,7 @@ def format_bool(bool_like):
     return ".true." if bool_like else ".false."
 
 
-def number_to_spec_str(value: Union[int, float]) -> str:
+def number_to_spec_str(value: int | float) -> str:
     """
     Write float to string.
 

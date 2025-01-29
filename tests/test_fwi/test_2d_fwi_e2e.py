@@ -3,13 +3,12 @@ Test end to end for FWI workflow.
 """
 
 import pytest
-
 import specster as sp
 
 
 @pytest.fixture(scope="class")
 def run_inverter(control_2d_inclusion_inversion):
-    """run the inverter"""
+    """Run the inverter"""
     return control_2d_inclusion_inversion.run_iteration()
 
 

@@ -1,10 +1,10 @@
 """
 Tests for reading/writing waveforms.
 """
+
 from pathlib import Path
 
 import numpy as np
-
 import specster.core.parse
 
 BASE_TEST_PATH = Path(__file__).parent.parent

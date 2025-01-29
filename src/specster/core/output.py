@@ -1,10 +1,12 @@
 """
 A module for controlling the output of simulations.
 """
+
+from __future__ import annotations
+
 import abc
 from contextlib import suppress
 from pathlib import Path
-from typing import Dict, Tuple
 
 import obspy
 
@@ -45,7 +47,7 @@ class BaseOutput(abc.ABC):
         return self
 
     @property
-    def lims(self) -> Dict[str, Tuple[float, float]]:
+    def lims(self) -> dict[str, tuple[float, float]]:
         """Return a dataframe of the liquid hist"""
         out = {}
         for char in "xyz":

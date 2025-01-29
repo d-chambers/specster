@@ -1,9 +1,11 @@
 """
 Modules for storing various misfit functions.
 """
+
+from __future__ import annotations
+
 import abc
 import copy
-from typing import Optional
 
 import numpy as np
 import obspy
@@ -26,9 +28,9 @@ def energy_norm(tr):
 class BaseMisfit(abc.ABC):
     """An abstract base class for misfit functions."""
 
-    window_df: Optional[pd.DataFrame] = None
-    waveform_df_: Optional[pd.DataFrame] = None
-    synth_df_: Optional[pd.DataFrame] = None
+    window_df: pd.DataFrame | None = None
+    waveform_df_: pd.DataFrame | None = None
+    synth_df_: pd.DataFrame | None = None
     taper_percentage = 0.05
     normalize_traces = False
 
@@ -216,7 +218,7 @@ class WaveformMisfit(BaseMisfit):
     def calc_misfit(self, tr_obs, tr_synth):
         """Calculate the misfit between streams."""
         dx = tr_obs.stats.delta
-        misfit = simps((tr_synth.data - tr_obs.data) ** 2, dx=dx)
+        misfit = simpson((tr_synth.data - tr_obs.data) ** 2, dx=dx)
         if self.normalize_traces:
             misfit / energy_norm(tr_obs)
         return misfit
@@ -245,7 +247,7 @@ class TravelTimeMisfit(BaseMisfit):
         this ratio, zero its adjoint.
     """
 
-    _abs_max = np.NaN
+    _abs_max = np.nan
 
     def __init__(self, trace_min=0.01, **kwargs):
         """Read in the streams for each directory."""
@@ -267,7 +269,7 @@ class TravelTimeMisfit(BaseMisfit):
         dt = 1 / tr_synth.stats.sampling_rate
         double_t_diff = tr_synth.copy().differentiate().differentiate()
         norm = double_t_diff.data * tr_synth.data
-        norm_sum = simps(norm, dx=dt)
+        norm_sum = simpson(norm, dx=dt)
         return norm_sum
 
     def calc_tt_diff(self, tr_obs, tr_synth):
@@ -313,7 +315,7 @@ class AmplitudeMisfit(TravelTimeMisfit):
     def calc_normalization(self, tr_synth):
         """Calculate the normalization waveforms."""
         data = tr_synth.data**2
-        return simps(data, dx=1 / tr_synth.stats.sampling_rate)
+        return simpson(data, dx=1 / tr_synth.stats.sampling_rate)
 
     def calc_amp_ratio(self, tr_obs, tr_synth) -> float:
         """Calculate the travel time differences"""

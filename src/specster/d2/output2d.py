@@ -1,11 +1,14 @@
 """
 Output for 2D simulations.
 """
+
+from __future__ import annotations
+
 import re
 import warnings
 from functools import cache, cached_property
 from pathlib import Path
-from typing import List, Literal, Optional, Self, Tuple
+from typing import Literal, Self
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -48,7 +51,7 @@ class SPECFEM2DStats(SpecsterModel):
     was healthy.
     """
 
-    mpi_slices: Optional[int] = Field(default=None, description="Number of MPI slices")
+    mpi_slices: int | None = Field(default=None, description="Number of MPI slices")
     spec_duration: float = Field(description="Duration of specfem run in seconds")
     receiver_count: int = Field(description="Number of receivers")
     max_cfl: float = Field(description="Max CLF stability condition, should be < 0.5")
@@ -81,16 +84,16 @@ class SPECFEM2DStats(SpecsterModel):
     points_per_s_max: float = Field(
         -1, description="max GLL points per highest s frequency"
     )
-    solid_gll_hist: List[GLLHistRow] = Field(
+    solid_gll_hist: list[GLLHistRow] = Field(
         description="histogram of min points per S wavelength in solid regions"
     )
-    fluid_gll_hist: List[GLLHistRow] = Field(
+    fluid_gll_hist: list[GLLHistRow] = Field(
         description="histogram of min points per P wavelength in fluid regions"
     )
-    x_lims: Optional[Tuple[float, float]] = Field(
+    x_lims: tuple[float, float] | None = Field(
         default=None, description="min and max value along x dimension."
     )
-    z_lims: Optional[Tuple[float, float]] = Field(
+    z_lims: tuple[float, float] | None = Field(
         default=None, description="min and max values along z dimension."
     )
 
@@ -132,7 +135,9 @@ class SPECFEM2DStats(SpecsterModel):
             receiver_count=match_between(
                 txt, "found a total of", "receivers", default=-1
             ),
-            spec_duration=match_between(txt, "time of the system :", "s"),
+            spec_duration=match_between(
+                txt, "date and time of the system\nin seconds     =", "s"
+            ),
             max_cfl=match_between(txt, r"must be below about 0.50 or so"),
             elements=match_between(txt, "number of elements:", default=-1),
             regular_elements=match_between(txt, "of which", "are regular elements"),
@@ -158,10 +163,10 @@ class SPECFEM2DStats(SpecsterModel):
             points_per_p_min=match_between(txt, "Nb pts / lambdaP_fmax min"),
             points_per_p_max=match_between(txt, "Nb pts / lambdaP_fmax max ="),
             points_per_s_min=match_between(
-                txt, "Nb pts / lambdaS_fmax min =", default=np.NaN
+                txt, "Nb pts / lambdaS_fmax min =", default=np.nan
             ),
             points_per_s_max=match_between(
-                txt, "Nb pts / lambdaS_fmax max =", default=np.NaN
+                txt, "Nb pts / lambdaS_fmax max =", default=np.nan
             ),
             solid_gll_hist=cls.parse_histogram(txt, "solid"),
             fluid_gll_hist=cls.parse_histogram(txt, "fluid"),
@@ -211,13 +216,13 @@ class OutPut2D(BaseOutput):
     @property
     def solid_gll_hist_df(self) -> pd.DataFrame:
         """Return a dataframe of the solid hist"""
-        data = [x.dict() for x in self.stats.solid_gll_hist]
+        data = [x.model_dump() for x in self.stats.solid_gll_hist]
         return pd.DataFrame(data)
 
     @property
     def fluid_gll_hist_df(self) -> pd.DataFrame:
         """Return a dataframe of the liquid hist"""
-        data = [x.dict() for x in self.stats.fluid_gll_hist]
+        data = [x.model_dump() for x in self.stats.fluid_gll_hist]
         return pd.DataFrame(data)
 
     # def load_event_kernels(

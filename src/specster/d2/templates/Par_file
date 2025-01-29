@@ -92,6 +92,12 @@ ATTENUATION_PORO_FLUID_PART     = {{ dis.attenuation.ATTENUATION_PORO_FLUID_PART
 Q0_poroelastic                  = {{ dis.attenuation.Q0_poroelastic }} # quality factor for viscous attenuation (ignore it if you are not using a poroelastic material)
 freq0_poroelastic               = {{ dis.attenuation.freq0_poroelastic }} # frequency for viscous attenuation (ignore it if you are not using a poroelastic material)
 
+# for electromagnetic attenuation
+# for electromagnetic attenuation
+ATTENUATION_PERMITTIVITY        = {{ dis.attenuation.ATTENUATION_PERMITTIVITY }}        # turn permittivity (Zener model) attenuation on or off for electromagnetic material
+ATTENUATION_CONDUCTIVITY        = {{ dis.attenuation.ATTENUATION_CONDUCTIVITY }}        # turn conductivity (Kelvin-Voigt model) attenuation on or off for electromagnetic material
+f0_electromagnetic              = {{ dis.attenuation.f0_electromagnetic }}          # (Hz) relevant only if source is a Dirac or a Heaviside, otherwise it is f0 the dominant frequency of the source in the DATA/SOURCE file
+
 # to undo attenuation and/or PMLs for sensitivity kernel calculations or forward runs with SAVE_FORWARD
 # use the flag below. It performs undoing of attenuation and/or of PMLs in an exact way for sensitivity kernel calculations
 # but requires disk space for temporary storage, and uses a significant amount of memory used as buffers for temporary storage.

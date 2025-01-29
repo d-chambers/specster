@@ -1,6 +1,9 @@
 """
 Misc small utilities.
 """
+
+from __future__ import annotations
+
 import copy
 import re
 import shutil
@@ -8,7 +11,7 @@ from concurrent.futures import ProcessPoolExecutor, wait
 from contextlib import contextmanager
 from functools import cache
 from pathlib import Path
-from typing import Dict, Literal, Optional, Union
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -51,7 +54,7 @@ def find_data_path(path):
 
 
 def find_base_path(path):
-    """find the base path"""
+    """Find the base path"""
     if path.name in special_dirs:
         return path.parent
     return path
@@ -70,7 +73,6 @@ def match_between(text, start, end="$", default=None):
     end
         The ending string, default matches on line ends.
     """
-
     regex = f"{start}(.*?){end}"
     out = re.search(regex, text, re.MULTILINE)
     if out is None and default is not None:
@@ -93,7 +95,7 @@ def load_templates_text_from_directory(path: Path) -> dict:
 
 
 @cache
-def load_templates_from_directory(path: Path) -> Dict[str, Template]:
+def load_templates_from_directory(path: Path) -> dict[str, Template]:
     """Load all templates in directory."""
     text_dict = load_templates_text_from_directory(path)
     out = {i: Template(v) for i, v in text_dict.items()}
@@ -141,7 +143,7 @@ def get_control_default_path(control: Literal["2D", "3D", None] = "2D") -> Path:
         raise ValueError(msg)
 
 
-def write_model_data(self, key: Optional[str] = None):
+def write_model_data(self, key: str | None = None):
     """Write the model data."""
     param_list = [self.get_formatted_str(x) for x in self.model_fields]
     return " ".join(param_list)
@@ -227,7 +229,7 @@ def cache_file_or_dir(path, name):
     shutil.copytree(path, cache_loc)
 
 
-def load_cache(name) -> Union[Path, None]:
+def load_cache(name) -> Path | None:
     """Get the path to a cache or raise not found Error."""
     cache_loc = Path(pooch.os_cache("specster")) / name
     if not cache_loc.exists():
@@ -261,6 +263,9 @@ def parallel_call(funcs):
     # assert not any(exceptions), "Exception raised in subprocess!"
     first_exception = [x for x in exceptions if x]
     if first_exception:
+        breakpoint()
+        funcs[0]()
+
         raise first_exception[0]
 
 

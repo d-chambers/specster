@@ -1,6 +1,7 @@
 """
 Tests for running commands.
 """
+
 from specster.core.callout import run_command
 
 
@@ -8,7 +9,7 @@ class TestBasic:
     """Test running basic shell commands."""
 
     def test_ls(self, capsys):
-        """simply list directory contents."""
+        """Simply list directory contents."""
         out = run_command("ls")
         assert out["stdout"]
         assert not out["stderr"]

@@ -3,7 +3,6 @@ Tests for specster utilities.
 """
 
 import pytest
-
 from specster.core.render import number_to_spec_str
 
 

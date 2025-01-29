@@ -3,7 +3,6 @@ Tests for writing parfile to a data directory.
 """
 
 import pytest
-
 from specster import Control2d
 
 

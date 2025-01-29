@@ -1,6 +1,7 @@
 """
 Module for simple optmiziations.
 """
+
 import numpy as np
 
 

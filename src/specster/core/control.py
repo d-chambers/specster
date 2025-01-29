@@ -1,13 +1,16 @@
 """
 Control class.
 """
+
+from __future__ import annotations
+
 import abc
 import copy
 import shutil
 import tempfile
 from functools import cache
 from pathlib import Path
-from typing import Optional, Self
+from typing import Self
 
 import pandas as pd
 
@@ -42,7 +45,7 @@ class BaseControl:
     _read_only = False
     _template_path = None
     _spec_parameters = SpecsterModel
-    _control_type: Optional[str] = None
+    _control_type: str | None = None
     _each_source_path = "EACH_SOURCE"
     _coord_columns = ("x", "y", "z")
 
@@ -58,7 +61,7 @@ class BaseControl:
     dt = SequenceDescriptor("par.dt")
     time_steps = SequenceDescriptor("par.nstep")
 
-    def __init__(self, base_path: Optional[Path] = None):
+    def __init__(self, base_path: Path | None = None):
         if base_path is None:
             base_path = get_control_default_path(self._control_type)
             self._read_only = True  # don't overwrite base files
@@ -123,7 +126,7 @@ class BaseControl:
 
     # --- General methods
 
-    def copy(self, path: Optional[Path] = None, exclude=None) -> Self:
+    def copy(self, path: Path | None = None, exclude=None) -> Self:
         """Copy control2D and specify a new path.
 
         Parameters
@@ -153,7 +156,7 @@ class BaseControl:
         self.par.internal_meshing.interfacesfile = "interfaces.dat"
         return self
 
-    def write(self, path: Optional[Path] = None, overwrite: bool = False) -> Self:
+    def write(self, path: Path | None = None, overwrite: bool = False) -> Self:
         """
         Write the control contents to disk.
 
@@ -172,7 +175,7 @@ class BaseControl:
         """
         assert not self._read_only, "control is read only"
         if path is not None:
-            self = self.copy(path)  # NOQA
+            self = self.copy(path)
         templates = load_templates_from_directory(self._template_path)
         paths = self.get_input_paths()
         assert set(set(templates)).issubset(paths)

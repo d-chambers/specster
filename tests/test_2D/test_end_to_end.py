@@ -3,7 +3,6 @@ End to end tests.
 """
 
 import pytest
-
 import specster as sp
 
 
@@ -21,6 +20,6 @@ class TestAcoustic2D:
     """Test case for acoustic 2D."""
 
     def test_acoustic(self, acoustic_control):
-        """simply run the acoustic example"""
+        """Simply run the acoustic example"""
         out = acoustic_control.output
         assert isinstance(out, sp.OutPut2D)

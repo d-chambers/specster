@@ -2,6 +2,8 @@
 Module for plotting.
 """
 
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
@@ -83,7 +85,7 @@ def plot_gll_historgrams(df, ax=None, title=""):
 
 
 def plot_kernels(
-    output: "specster.OutPut2D",
+    output: specster.OutPut2D,
     kernel_df,
     columns=None,
     scale=0.15,
@@ -107,7 +109,7 @@ def plot_kernels(
 
 
 def plot_single_kernel(
-    output: "specster.OutPut2D",
+    output: specster.OutPut2D,
     df,
     column,
     ax=None,
@@ -167,7 +169,6 @@ def _maybe_switch_axis_to_km(ax: plt.Axes, max_value=10_000):
 
     This just helps presentability of the figures.
     """
-
     xlims = ax.get_xlim()
     x_diff = xlims[1] - xlims[0]
     ylims = ax.get_ylim()

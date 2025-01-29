@@ -1,15 +1,21 @@
 """
 Module for models.
 """
-from functools import cached_property
-from typing import Optional, Annotated
 
-from pydantic import ConfigDict, BaseModel, TypeAdapter, PlainValidator
+from __future__ import annotations
+
+from functools import cached_property
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, PlainValidator
 
 
 class SpecsterModel(BaseModel):
     """Abstract model in case we need to modify base behavior."""
-    model_config = ConfigDict(extra="ignore", validate_assignment=True, ignored_types=(cached_property,))
+
+    model_config = ConfigDict(
+        extra="ignore", validate_assignment=True, ignored_types=(cached_property,)
+    )
 
     @classmethod
     def read_line(cls, params):
@@ -38,7 +44,7 @@ class SpecsterModel(BaseModel):
             value = formatter_dict[field.annotation](value)
         return str(value)
 
-    def write_model_data(self, key: Optional[str] = None):
+    def write_model_data(self, key: str | None = None):
         """Write the data contained in key to a string."""
         if key is None:
             msg = f"{self.__class__.__name__} requires a specified field"
@@ -100,7 +106,6 @@ class AbstractParameterModel(SpecsterModel):
 #     def validate(cls, validator):
 #         """Simply call func."""
 #         return cls.func(validator)
-
 
 
 def spec_str_to_float(value):

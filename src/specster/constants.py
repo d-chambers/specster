@@ -1,6 +1,7 @@
 """
 Constant values for specster.
 """
+
 # number of zeroes to use after proc in binary file names
 PROC_ZEROES = 6
 IGNORE_BINS = {"NSPECibool"}

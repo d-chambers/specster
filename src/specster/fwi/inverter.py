@@ -1,13 +1,16 @@
 """
 Class for inverting material properties.
 """
+
+from __future__ import annotations
+
 import pickle
 import shutil
 import time
 from functools import cache, partial, reduce
 from operator import add
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Union
+from typing import Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -46,7 +49,7 @@ def _get_streams_from_each_source_dir(path):
 
 
 def _run_controls(control: sp.Control2d):
-    """helper function for mapping control run over many processes."""
+    """Helper function for mapping control run over many processes."""
     control.write()
     control.run()
     return control.base_path
@@ -62,7 +65,7 @@ class IterationResults(SpecsterModel):
 
     iteration: int
     data_misfit: float
-    model_misfit: Dict[str, float]
+    model_misfit: dict[str, float]
     gradient_scalar: float
     ls_lambda: float
 
@@ -94,10 +97,10 @@ class Inverter:
 
     def __init__(
         self,
-        observed_data_path: Union[Path, BaseControl],
+        observed_data_path: Path | BaseControl,
         control: BaseControl,
         misfit: BaseMisfit,
-        true_control: Optional[BaseControl] = None,
+        true_control: BaseControl | None = None,
         optimization: Literal["steepest descent"] = "steepest descent",
         working_path="specster_scratch",
         kernels=("alpha", "beta"),
@@ -230,7 +233,7 @@ class Inverter:
                     upper_bounds=best_lambda,
                 )
             else:
-                grad_scale, new_model, best_lambda = np.NaN, current_material_df, np.NaN
+                grad_scale, new_model, best_lambda = np.nan, current_material_df, np.nan
             maybe_model_misfit = self._calc_model_misfit(new_model)
             self._broadcast_model_updates(new_model)
 
@@ -372,7 +375,7 @@ class Inverter:
         current_streams = [x.get_waveforms() for x in self._control.each_source_output]
         return current_streams
 
-    def get_controls(self) -> List[sp.Control2d]:
+    def get_controls(self) -> list[sp.Control2d]:
         """Get a control2d for each event."""
         out = []
         for path in sorted(self._control.each_source_path.iterdir()):
