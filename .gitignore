@@ -88,3 +88,7 @@ docs/quickref/stubs
 
 # mypy
 .mypy_cache
+
+# Keep alll the test data.
+!/tests/test_2D/test_data/**/*
+!/src/specster/d2/data/**/*
