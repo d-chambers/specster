@@ -224,7 +224,7 @@ def read_ascii_kernels(path, kernel=None, coords=XYZ[:2]):
         proc = int(name.split("_")[0].replace("proc", ""))
         field_names = coords + name.split("_")[1:-1]
         df = pd.read_csv(
-            kernel_path, delim_whitespace=True, names=field_names, header=None
+            kernel_path, sep='\s+', names=field_names, header=None
         )
         out[proc].append(df.set_index(coords))
 
