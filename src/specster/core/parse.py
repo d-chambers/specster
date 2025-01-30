@@ -87,6 +87,9 @@ def write_directory_binaries(df, path):
                 warnings.warn(msg)
                 continue
             data_path = path / name
+            # Dont need to write proc to binary database.
+            if col == "proc":
+                continue
             write_specfem_binary(data, data_path)
 
 
@@ -223,9 +226,7 @@ def read_ascii_kernels(path, kernel=None, coords=XYZ[:2]):
         name = kernel_path.name
         proc = int(name.split("_")[0].replace("proc", ""))
         field_names = coords + name.split("_")[1:-1]
-        df = pd.read_csv(
-            kernel_path, sep='\s+', names=field_names, header=None
-        )
+        df = pd.read_csv(kernel_path, sep=r"\s+", names=field_names, header=None)
         out[proc].append(df.set_index(coords))
 
     # merge each process on coords

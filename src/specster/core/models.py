@@ -27,7 +27,8 @@ class SpecsterModel(BaseModel):
         input_dict = {i: v for i, v in zip(field_names, params)}
         return cls(**input_dict)
 
-    @cached_property
+    # @cached_property
+    @property
     def disp(self):
         """Return a displayer for nicely rendering contents."""
         from specster.core.render import Displayer

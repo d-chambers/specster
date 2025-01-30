@@ -358,7 +358,7 @@ class BaseControl:
         model = read_binaries_in_directory(self._data_path)
         if len(model) and not overwrite:
             return model.set_index(list(self._coord_columns))
-        with run_new_par(self, supress_output=True) as par:
+        with run_new_par(self, supress_output=False) as par:
             par.simulation_type = "1"
             par.save_forward = False
             par.mesh.setup_with_binary_database = "1"
@@ -377,7 +377,7 @@ class BaseControl:
         # ensure cols are set to spatial coords.
         if set(df.columns) & set(self._coord_columns):
             df = df.set_index(list(self._coord_columns))
-        # not index is still spatial coords here; they won't update.
+        # note index is still spatial coords here; they won't update.
         write_directory_binaries(df, self._data_path)
         self.par.mesh.setup_with_binary_database = "2"
         self.par.mesh.model = "binary"
@@ -400,3 +400,7 @@ class BaseControl:
         """Clear the output traces as to ensure new ones are generated."""
         for path in self.output_path.rglob("*semd"):
             path.unlink()
+
+    def pipe(self, func, *args, **kwargs):
+        """Pipe self into func with specified args and kwargs."""
+        return func(self, *args, **kwargs)
