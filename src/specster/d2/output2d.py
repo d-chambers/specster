@@ -130,14 +130,19 @@ class SPECFEM2DStats(SpecsterModel):
     @classmethod
     def _get_spec_data(cls, txt):
         """Return a dict of specfem data."""
+        try:  # dev branch needs this
+            spec_duration = match_between(
+                txt, "date and time of the system\nin seconds     =", "s"
+            )
+        except ValueError:  # 8.1.0 needs this
+            spec_duration = match_between(txt, "time of the system :", "s")
+
         out = dict(
             mpi_slices=match_between(txt, "total of", "slices", 1),
             receiver_count=match_between(
                 txt, "found a total of", "receivers", default=-1
             ),
-            spec_duration=match_between(
-                txt, "date and time of the system\nin seconds     =", "s"
-            ),
+            spec_duration=spec_duration,
             max_cfl=match_between(txt, r"must be below about 0.50 or so"),
             elements=match_between(txt, "number of elements:", default=-1),
             regular_elements=match_between(txt, "of which", "are regular elements"),

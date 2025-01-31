@@ -41,6 +41,7 @@ SKIP_EXAMPLES = {
     "Marmousi_mesh_of_the_model",  # bad regions
     "check_absolute_amplitude_of_force_source_seismograms_viscoelastic",
     "Tape2007",
+    "Industrial_Format_SEP",
 }
 
 
@@ -271,6 +272,13 @@ def control_2d_inclusion_inversion(tmp_path_factory):
     shutil.copytree(cache_path, copy_path)
     inverter = specster.Inverter.load_inverter(copy_path)
     return inverter
+
+
+@pytest.fixture(scope="class")
+def control_inclusion_2d(tmp_path_factory):
+    path = tmp_path_factory.mktemp("temp_inclusion_path")
+    control = specster.load_2d_example("inclusion_2d")
+    return control.copy(path)
 
 
 @pytest.fixture()

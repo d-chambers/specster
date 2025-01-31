@@ -77,7 +77,8 @@ def match_between(text, start, end="$", default=None):
     out = re.search(regex, text, re.MULTILINE)
     if out is None and default is not None:
         return default
-    assert out is not None, "Match returned nothing!"
+    if out is None:
+        raise ValueError("Match returned nothing!")
     return out.group(1).replace("=", "").strip()
 
 

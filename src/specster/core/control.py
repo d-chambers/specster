@@ -379,9 +379,9 @@ class BaseControl:
             df = df.set_index(list(self._coord_columns))
         # note index is still spatial coords here; they won't update.
         write_directory_binaries(df, self._data_path)
-        self.par.mesh.setup_with_binary_database = "2"
+        # self.par.mesh.setup_with_binary_database = "2"
         self.par.mesh.model = "binary"
-        self.par.mesh.save_model = "default"
+        self.par.mesh.save_model = "binary"
         self.write(overwrite=True)
         return self
 
